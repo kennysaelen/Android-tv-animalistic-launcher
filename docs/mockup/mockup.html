@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<!-- Design mockup. Real app banners are not included in this repo; the launcher loads them at runtime from the installed apps. -->
+<meta charset="utf-8">
+<title>KennysLauncher – mockup v3</title>
+<style>
+  :root { --scale: 0.6; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111; color: #ddd; font-family: "Segoe UI", Roboto, sans-serif; padding: 24px; }
+  h1 { font-weight: 300; margin-bottom: 8px; }
+  p.hint { color: #888; margin-bottom: 16px; }
+  .picker { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .picker button { background: #222; color: #ddd; border: 1px solid #444; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: 14px; }
+  .picker button.active { background: #e8e8e8; color: #111; }
+  .frame { width: calc(1920px * var(--scale)); height: calc(1080px * var(--scale)); border: 8px solid #000; border-radius: 10px; overflow: hidden; box-shadow: 0 10px 40px #000; }
+  .tv { width: 1920px; height: 1080px; transform: scale(var(--scale)); transform-origin: 0 0; position: relative; color: #fff; overflow: hidden; }
+
+  .bg { position: absolute; inset: 0; background: center / cover no-repeat; transition: background-image .6s; }
+
+  .scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.38) 0%, rgba(0,0,0,.12) 22%, rgba(0,0,0,0) 34%), linear-gradient(0deg, rgba(0,0,0,.30) 0%, rgba(0,0,0,0) 28%); }
+  .clock { position: absolute; top: 64px; left: 88px; z-index: 2; text-shadow: 0 2px 18px rgba(0,0,0,.45); }
+  .time { font-size: 120px; font-weight: 200; letter-spacing: -2px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .date { margin-top: 8px; font-size: 34px; font-weight: 300; opacity: .9; }
+
+  .status { position: absolute; top: 72px; right: 88px; display: flex; gap: 30px; align-items: center; font-size: 32px; font-weight: 300; z-index: 2; text-shadow: 0 2px 12px rgba(0,0,0,.5); }
+  .status svg { width: 36px; height: 36px; fill: none; stroke: #fff; stroke-width: 1.8; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
+  .status .gear { opacity: .55; }
+
+  .apps { position: absolute; left: 0; right: 0; bottom: 110px; display: flex; justify-content: center; gap: 24px; z-index: 2; }
+  .app { width: 168px; height: 94.5px; border-radius: 14px; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 600; filter: brightness(.72) saturate(.85); transition: transform .2s, filter .2s, box-shadow .2s; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+  .app.focus { transform: scale(1.18); filter: none; box-shadow: 0 0 0 4px #fff, 0 14px 40px rgba(0,0,0,.6); }
+  .label { position: absolute; left: 0; right: 0; bottom: 52px; text-align: center; font-size: 28px; font-weight: 300; opacity: .85; z-index: 2; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+</style>
+</head>
+<body>
+<h1>KennysLauncher – mockup v3</h1>
+<p class="hint">Your day / evening / night wallpapers · clock top-left · live weather for Erembodegem (Open-Meteo) · ←/→ moves focus. "Auto" switches by time of day.</p>
+<div class="picker" id="picker"></div>
+
+<div class="frame"><div class="tv">
+  <div class="bg" id="bg"></div><div class="scrim"></div>
+  <div class="clock">
+    <div class="time" id="time">--:--</div>
+    <div class="date" id="date"></div>
+  </div>
+  <div class="status">
+    <span id="weather">…</span>
+    <svg viewBox="0 0 24 24"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1.2" fill="#fff"/></svg>
+    <svg class="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>
+  </div>
+  <div class="apps" id="apps"></div>
+  <div class="label" id="label"></div>
+</div></div>
+
+<script>
+const walls = { day: "../../app/src/main/res/drawable-nodpi/bg_day.jpg", dusk: "../../app/src/main/res/drawable-nodpi/bg_dusk.jpg", night: "../../app/src/main/res/drawable-nodpi/bg_night.jpg" };
+const autoPick = h => (h >= 7 && h < 17) ? "day" : (h >= 17 && h < 20) ? "dusk" : "night";
+const options = [["auto", "Auto (time of day)"], ["day", "Day"], ["dusk", "Evening"], ["night", "Night"]];
+let mode = new URLSearchParams(location.search).get("m") || "auto";
+const bg = document.getElementById("bg"), picker = document.getElementById("picker");
+function applyBg() {
+  const key = mode === "auto" ? autoPick(new Date().getHours()) : mode;
+  bg.style.backgroundImage = `url(${walls[key]})`;
+  [...picker.children].forEach(b => b.classList.toggle("active", b.dataset.id === mode));
+}
+options.forEach(([id, name]) => { const b = document.createElement("button"); b.textContent = name; b.dataset.id = id; b.onclick = () => { mode = id; applyBg(); }; picker.appendChild(b); });
+applyBg();
+
+const apps = [
+  ["Netflix", "com.netflix.ninja.banner.png"], ["YouTube", "com.google.android.youtube.tv.banner.png"],
+  ["Prime Video", "com.amazon.amazonvideo.livingroom.banner.png"], ["Disney+", "com.disney.disneyplus.banner.png"],
+  ["Spotify", "com.spotify.tv.android.banner.png"], ["VRT MAX", "be.vrt.vrtnu.banner.webp"],
+  ["VTM GO", "be.vmma.vtm.zenderapp.banner.png"], ["Streamz", "be.dpgmedia.streamz.banner.webp"],
+  ["TV kijken", "org.droidtv.playtv.banner.png"],
+];
+const row = document.getElementById("apps"), label = document.getElementById("label");
+let focus = 0;
+apps.forEach(([n, img]) => { const d = document.createElement("div"); d.className = "app"; d.style.background = `hsl(${(row.children.length*40)%360} 45% 32%)`; d.textContent = n; d.style.cssText += "display:flex;align-items:center;justify-content:center;color:#fff;font:600 18px system-ui"; row.appendChild(d); });
+function paint() { [...row.children].forEach((el, i) => el.classList.toggle("focus", i === focus)); label.textContent = apps[focus][0]; }
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") focus = Math.min(apps.length - 1, focus + 1);
+  if (e.key === "ArrowLeft") focus = Math.max(0, focus - 1);
+  paint();
+});
+paint();
+
+function tick() {
+  const now = new Date();
+  document.getElementById("time").textContent = now.toLocaleTimeString("nl-BE", { hour: "2-digit", minute: "2-digit", hour12: false });
+  document.getElementById("date").textContent = now.toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long" });
+  if (mode === "auto") applyBg();
+}
+tick(); setInterval(tick, 1000);
+
+const wmo = c => c === 0 ? "☀" : c <= 2 ? "🌤" : c === 3 ? "☁" : c <= 48 ? "🌫" : c <= 67 ? "🌧" : c <= 77 ? "❄" : c <= 82 ? "🌦" : "⛈";
+fetch("https://api.open-meteo.com/v1/forecast?latitude=50.92&longitude=4.05&current=temperature_2m,weather_code&timezone=Europe/Brussels")
+  .then(r => r.json())
+  .then(j => { document.getElementById("weather").textContent = `${wmo(j.current.weather_code)} ${Math.round(j.current.temperature_2m)}°`; })
+  .catch(() => { document.getElementById("weather").textContent = ""; });
+</script>
+</body>
+</html>
+
+
+
