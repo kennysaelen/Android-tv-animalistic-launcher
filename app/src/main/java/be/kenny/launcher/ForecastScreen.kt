@@ -17,20 +17,34 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
     private val daysRow = root.findViewById<LinearLayout>(R.id.forecastDays)
     private val back = root.findViewById<TextView>(R.id.forecastBack)
     private val retry = root.findViewById<TextView>(R.id.forecastRetry)
+    private val previous = root.findViewById<ImageView>(R.id.forecastPrevious)
+    private val next = root.findViewById<ImageView>(R.id.forecastNext)
     private val cards = mutableListOf<Pair<View, ForecastDay>>()
     private val locale = Locale("nl", "BE")
     private val weekday = DateTimeFormatter.ofPattern("EEEE", locale)
+    private val shortDate = DateTimeFormatter.ofPattern("d MMM", locale)
+    private val fullDate = DateTimeFormatter.ofPattern("EEEE d MMMM", locale)
     private val dateTime = DateTimeFormatter.ofPattern("d MMM HH:mm", locale)
     private val clock = DateTimeFormatter.ofPattern("HH:mm")
     private var forecast: WeatherForecast? = null
     private var today = LocalDate.now(Weather.zone)
     private var selectedDate: LocalDate? = null
+    private var availableDays = emptyList<ForecastDay>()
+    private var pageIndex = 0
 
     val isOpen: Boolean get() = root.visibility == View.VISIBLE
 
     init {
         back.setOnClickListener { onBack() }
         retry.setOnClickListener { onRetry() }
+        previous.setOnClickListener { changePage(-1) }
+        next.setOnClickListener { changePage(1) }
+        for (arrow in listOf(previous, next)) {
+            arrow.setOnFocusChangeListener { view, hasFocus ->
+                val scale = if (hasFocus) 1.04f else 1f
+                view.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
+            }
+        }
         back.nextFocusLeftId = back.id
         back.nextFocusDownId = back.id
         retry.nextFocusUpId = retry.id
@@ -66,12 +80,14 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
     ) {
         val hadDayFocus = cards.any { it.first.hasFocus() }
         val hadRetryFocus = retry.hasFocus()
+        val focusedArrow = listOf(previous, next).firstOrNull { it.hasFocus() }
         val hadDays = cards.isNotEmpty()
         val localToday = now.withZoneSameInstant(Weather.zone).toLocalDate()
         val rebuild = data != forecast || today != localToday
         forecast = data
         today = localToday
         val days = data?.days.orEmpty().filter { it.date >= today }
+        availableDays = days
         val stale = data != null && (Duration.between(data.fetchedAt, now.toInstant()).toMinutes() >= 60 ||
             Duration.between(data.current.time.toInstant(), now.toInstant()).toMinutes() >= 90)
         val needsRetry = !loading && (error || offline || stale || data?.hasMissingValues == true || days.isEmpty())
@@ -101,7 +117,14 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
         })
         root.findViewById<View>(R.id.forecastDetails).visibility = if (days.isEmpty()) View.GONE else View.VISIBLE
         root.findViewById<View>(R.id.forecastDaysHeading).visibility = if (days.isEmpty()) View.GONE else View.VISIBLE
-        if (rebuild) buildDays(days)
+        root.findViewById<View>(R.id.forecastPager).visibility = if (days.isEmpty()) View.GONE else View.VISIBLE
+        root.findViewById<View>(R.id.forecastPageRange).visibility = if (days.isEmpty()) View.GONE else View.VISIBLE
+        if (rebuild) {
+            val selectedIndex = days.indexOfFirst { it.date == selectedDate }
+            pageIndex = if (selectedIndex >= 0) selectedIndex / PAGE_SIZE
+            else pageIndex.coerceAtMost(days.lastIndex.coerceAtLeast(0) / PAGE_SIZE)
+            buildDays(days.drop(pageIndex * PAGE_SIZE).take(PAGE_SIZE))
+        }
         if (cards.isNotEmpty()) {
             val selected = cards.firstOrNull { it.second.date == selectedDate } ?: cards.first()
             select(selected.first, selected.second)
@@ -114,9 +137,25 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
                 cards.firstOrNull { it.second.date == selectedDate }?.first?.requestFocus()
             } else if (hadRetryFocus && retry.visibility != View.VISIBLE) {
                 back.requestFocus()
+            } else if (focusedArrow != null && !focusedArrow.isEnabled) {
+                focusSelection()
             }
             restoreFocus()
         }
+    }
+
+    private fun changePage(direction: Int) {
+        val target = pageIndex + direction
+        if (target < 0 || target * PAGE_SIZE >= availableDays.size) return
+        pageIndex = target
+        val days = availableDays.drop(pageIndex * PAGE_SIZE).take(PAGE_SIZE)
+        val selected = if (direction > 0) days.first() else days.last()
+        selectedDate = selected.date
+        buildDays(days)
+        updateNavigation()
+        val card = cards.first { it.second.date == selected.date }.first
+        select(card, selected)
+        card.requestFocus()
     }
 
     private fun buildDays(days: List<ForecastDay>) {
@@ -126,15 +165,16 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
             val card = LayoutInflater.from(context).inflate(R.layout.weather_day, daysRow, false)
             card.id = View.generateViewId()
             (card.layoutParams as LinearLayout.LayoutParams).marginEnd =
-                if (index == days.lastIndex) 0 else (12 * context.resources.displayMetrics.density).roundToInt()
+                if (index == PAGE_SIZE - 1) 0 else (12 * context.resources.displayMetrics.density).roundToInt()
             card.findViewById<TextView>(R.id.weatherDayName).text = dayName(day)
+            card.findViewById<TextView>(R.id.weatherDayDate).text = day.date.format(shortDate)
             card.findViewById<ImageView>(R.id.weatherDayIcon).setImageResource(WeatherDisplay.icon(day.code))
             card.findViewById<TextView>(R.id.weatherDayHigh).text = WeatherDisplay.temperature(day.high)
             card.findViewById<TextView>(R.id.weatherDayLow).text = WeatherDisplay.temperature(day.low)
             card.findViewById<TextView>(R.id.weatherDayRain).text =
                 context.getString(R.string.weather_rain_value, WeatherDisplay.percent(day.rainChance))
             card.contentDescription = context.getString(R.string.weather_day_description,
-                dayName(day), context.getString(WeatherDisplay.description(day.code)),
+                datedDayName(day), context.getString(WeatherDisplay.description(day.code)),
                 WeatherDisplay.temperature(day.high), WeatherDisplay.temperature(day.low),
                 WeatherDisplay.percent(day.rainChance))
             card.setOnClickListener {
@@ -180,28 +220,62 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
         root.findViewById<TextView>(R.id.forecastLabel).text = if (current != null) {
             "${dayName(day)} · ${context.getString(R.string.weather_observed, current.time.format(clock))}"
         } else {
-            context.getString(R.string.weather_maximum_label, dayName(day))
+            context.getString(R.string.weather_maximum_label, datedDayName(day))
         }
         back.nextFocusUpId = view.id
         retry.nextFocusDownId = view.id
     }
 
     private fun updateNavigation() {
+        setArrowEnabled(previous, R.id.forecastPreviousControl, pageIndex > 0 && cards.isNotEmpty())
+        setArrowEnabled(next, R.id.forecastNextControl, (pageIndex + 1) * PAGE_SIZE < availableDays.size)
+        if (cards.isNotEmpty()) {
+            val first = pageIndex * PAGE_SIZE + 1
+            val last = first + cards.size - 1
+            root.findViewById<TextView>(R.id.forecastPageRange).apply {
+                text = context.getString(R.string.weather_page_range, first, last, availableDays.size)
+                contentDescription = context.getString(R.string.weather_page_description, first, last, availableDays.size)
+            }
+        }
         val selectedId = cards.firstOrNull { it.second.date == selectedDate }?.first?.id
             ?: cards.firstOrNull()?.first?.id ?: back.id
         val topId = if (retry.visibility == View.VISIBLE) retry.id else back.id
         back.nextFocusUpId = selectedId
         back.nextFocusRightId = if (retry.visibility == View.VISIBLE) retry.id else selectedId
         retry.nextFocusDownId = selectedId
+        previous.nextFocusLeftId = previous.id
+        previous.nextFocusRightId = cards.firstOrNull()?.first?.id ?: back.id
+        next.nextFocusLeftId = cards.lastOrNull()?.first?.id ?: back.id
+        next.nextFocusRightId = next.id
+        for (arrow in listOf(previous, next)) {
+            arrow.nextFocusUpId = topId
+            arrow.nextFocusDownId = back.id
+        }
         cards.forEachIndexed { index, (view, _) ->
-            view.nextFocusLeftId = cards.getOrNull(index - 1)?.first?.id ?: view.id
-            view.nextFocusRightId = cards.getOrNull(index + 1)?.first?.id ?: view.id
+            view.nextFocusLeftId = cards.getOrNull(index - 1)?.first?.id
+                ?: if (previous.isEnabled) previous.id else view.id
+            view.nextFocusRightId = cards.getOrNull(index + 1)?.first?.id
+                ?: if (next.isEnabled) next.id else view.id
             view.nextFocusUpId = topId
             view.nextFocusDownId = back.id
         }
     }
 
+    private fun setArrowEnabled(arrow: View, containerId: Int, enabled: Boolean) {
+        arrow.isEnabled = enabled
+        arrow.isFocusable = enabled
+        arrow.isClickable = enabled
+        root.findViewById<View>(containerId).alpha = if (enabled) 1f else .3f
+    }
+
+    private fun datedDayName(day: ForecastDay) =
+        day.date.format(fullDate).replaceFirstChar { it.titlecase(locale) }
+
     private fun dayName(day: ForecastDay): String =
         if (day.date == today) context.getString(R.string.weather_today)
         else day.date.format(weekday).replaceFirstChar { it.titlecase(locale) }
+
+    companion object {
+        private const val PAGE_SIZE = 5
+    }
 }

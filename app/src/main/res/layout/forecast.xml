@@ -146,17 +146,93 @@
         android:text="@string/weather_days"
         android:textSize="15dp"
         android:visibility="gone" />
+    <TextView
+        android:id="@+id/forecastPageRange"
+        style="@style/WeatherText"
+        android:layout_width="92dp"
+        android:layout_height="22dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="106dp"
+        android:layout_marginBottom="168.5dp"
+        android:background="@drawable/weather_page_indicator"
+        android:gravity="center"
+        android:textSize="12dp"
+        android:visibility="gone" />
     <LinearLayout
-        android:id="@+id/forecastDays"
+        android:id="@+id/forecastPager"
         android:layout_width="match_parent"
-        android:layout_height="90dp"
+        android:layout_height="100dp"
         android:layout_gravity="bottom"
-        android:layout_marginStart="46dp"
-        android:layout_marginEnd="46dp"
-        android:layout_marginBottom="62dp"
+        android:layout_marginStart="48dp"
+        android:layout_marginEnd="48dp"
+        android:layout_marginBottom="55dp"
+        android:baselineAligned="false"
         android:clipChildren="false"
         android:clipToPadding="false"
-        android:orientation="horizontal" />
+        android:orientation="horizontal"
+        android:visibility="gone">
+        <FrameLayout
+            android:id="@+id/forecastPreviousControl"
+            android:layout_width="48dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="10dp"
+            android:clipChildren="false">
+            <ImageView
+                android:id="@+id/forecastPrevious"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="top|center_horizontal"
+                android:layout_marginTop="32dp"
+                android:background="@drawable/weather_day_background"
+                android:clickable="true"
+                android:contentDescription="@string/weather_previous_days"
+                android:focusable="true"
+                android:padding="6dp"
+                android:src="@drawable/ic_chevron_left" />
+            <TextView
+                style="@style/WeatherText"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="11dp"
+                android:importantForAccessibility="no"
+                android:text="@string/weather_previous"
+                android:textSize="11.5dp" />
+        </FrameLayout>
+        <LinearLayout
+            android:id="@+id/forecastDays"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:orientation="horizontal"
+            android:weightSum="5" />
+        <FrameLayout
+            android:id="@+id/forecastNextControl"
+            android:layout_width="48dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="10dp"
+            android:clipChildren="false">
+            <ImageView
+                android:id="@+id/forecastNext"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="top|center_horizontal"
+                android:layout_marginTop="32dp"
+                android:background="@drawable/weather_day_background"
+                android:clickable="true"
+                android:contentDescription="@string/weather_next_days"
+                android:focusable="true"
+                android:padding="6dp"
+                android:src="@drawable/ic_chevron_right" />
+            <TextView
+                style="@style/WeatherText"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="11dp"
+                android:importantForAccessibility="no"
+                android:text="@string/weather_next"
+                android:textSize="11.5dp" />
+        </FrameLayout>
+    </LinearLayout>
     <TextView
         android:id="@+id/forecastBack"
         style="@style/WeatherAction"

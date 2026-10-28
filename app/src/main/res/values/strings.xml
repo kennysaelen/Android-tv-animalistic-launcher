@@ -5,6 +5,12 @@
     <string name="weather_shortcut_description">%1$s, %2$s. Weerbericht openen</string>
     <string name="weather_title">Weer in %1$s</string>
     <string name="weather_days">De komende dagen</string>
+    <string name="weather_previous">Vorige</string>
+    <string name="weather_next">Volgende</string>
+    <string name="weather_previous_days">Vorige vijf dagen</string>
+    <string name="weather_next_days">Volgende vijf dagen</string>
+    <string name="weather_page_range">%1$d–%2$d / %3$d</string>
+    <string name="weather_page_description">Dag %1$d tot %2$d van %3$d</string>
     <string name="weather_today">Vandaag</string>
     <string name="weather_back">Terug</string>
     <string name="weather_retry">Opnieuw proberen</string>

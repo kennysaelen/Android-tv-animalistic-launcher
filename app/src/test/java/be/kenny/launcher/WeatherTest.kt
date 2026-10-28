@@ -18,19 +18,20 @@ import java.time.LocalDate
 @Config(sdk = [26])
 class WeatherTest {
     @Test
-    fun parsesCurrentAndFiveDaysWithExplicitUnitsAndLocation() {
+    fun parsesCurrentAndTenDaysWithExplicitUnitsAndLocation() {
         val result = Weather.parse(weatherJson(), Instant.parse("2026-10-28T00:05:00Z"))
         assertEquals(8.9, result.current.temperature!!, 0.001)
         assertEquals(false, result.current.isDay)
         assertEquals(Weather.zone, result.current.time.zone)
         assertEquals(Instant.parse("2026-10-28T00:00:00Z"), result.current.time.toInstant())
-        assertEquals(5, result.days.size)
+        assertEquals(10, result.days.size)
         assertEquals(LocalDate.of(2026, 10, 28), result.days.first().date)
+        assertEquals(LocalDate.of(2026, 11, 6), result.days.last().date)
         assertEquals(70.0, result.days[3].rainChance!!, 0.001)
         assertEquals("17:25", result.days.first().sunset.toString())
         assertFalse(result.hasMissingValues)
         assertTrue(Weather.requestUrl.contains("latitude=${Sun.LAT}&longitude=${Sun.LON}"))
-        assertTrue(Weather.requestUrl.contains("forecast_days=5"))
+        assertTrue(Weather.requestUrl.contains("forecast_days=10"))
         assertTrue(Weather.requestUrl.contains("temperature_unit=celsius&wind_speed_unit=kmh"))
     }
 
@@ -66,9 +67,30 @@ class WeatherTest {
     }
 
     @Test
+    fun shorterForecastReturnsOnlyAvailableDaysAndReportsMissingData() {
+        val json = JSONObject(weatherJson())
+        val daily = json.getJSONObject("daily")
+        daily.keys().forEach { key ->
+            val values = daily.getJSONArray(key)
+            while (values.length() > 7) values.remove(values.length() - 1)
+        }
+        val result = Weather.parse(json.toString())
+        assertEquals(7, result.days.size)
+        assertEquals(LocalDate.of(2026, 11, 3), result.days.last().date)
+        assertTrue(result.hasMissingValues)
+    }
+
+    @Test
+    fun rejectsForecastBeyondRequestedTenDays() {
+        val json = JSONObject(weatherJson())
+        json.getJSONObject("daily").getJSONArray("time").put("2026-11-07")
+        assertThrows(JSONException::class.java) { Weather.parse(json.toString()) }
+    }
+
+    @Test
     fun disconnectsAfterSuccessHttpFailureAndMalformedResponse() {
         val valid = FakeConnection(weatherJson())
-        assertEquals(5, Weather.load(valid).days.size)
+        assertEquals(10, Weather.load(valid).days.size)
         assertTrue(valid.disconnected)
         assertEquals(8000, valid.connectTimeout)
         assertEquals(8000, valid.readTimeout)
@@ -98,15 +120,15 @@ internal fun weatherJson() = """
         "weather_code": 0, "is_day": 0, "wind_speed_10m": 11.5, "wind_direction_10m": 223
       },
       "daily": {
-        "time": ["2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01"],
-        "weather_code": [2, 0, 3, 61, 2],
-        "temperature_2m_max": [14.4, 15.3, 13.2, 13.0, 11.2],
-        "temperature_2m_min": [6.3, 8.8, 5.6, 5.5, 4.4],
-        "apparent_temperature_max": [12.6, 15.0, 11.8, 11.2, 9.2],
-        "precipitation_probability_max": [20, 10, 30, 70, 20],
-        "wind_speed_10m_max": [14.0, 11.2, 11.7, 12.2, 9.4],
-        "wind_direction_10m_dominant": [222, 148, 69, 66, 36],
-        "sunset": ["2026-10-28T17:25", "2026-10-29T17:23", "2026-10-30T17:22", "2026-10-31T17:20", "2026-11-01T17:18"]
+        "time": ["2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"],
+        "weather_code": [2, 0, 3, 61, 2, 61, 3, 0, 2, 61],
+        "temperature_2m_max": [14.4, 15.3, 13.2, 13.0, 11.2, 13.0, 12.0, 14.0, 13.0, 11.0],
+        "temperature_2m_min": [6.3, 8.8, 5.6, 5.5, 4.4, 6.0, 5.0, 7.0, 6.0, 4.0],
+        "apparent_temperature_max": [12.6, 15.0, 11.8, 11.2, 9.2, 11.0, 10.0, 12.0, 11.0, 9.0],
+        "precipitation_probability_max": [20, 10, 30, 70, 20, 60, 30, 10, 20, 70],
+        "wind_speed_10m_max": [14.0, 11.2, 11.7, 12.2, 9.4, 18.0, 15.0, 12.0, 10.0, 20.0],
+        "wind_direction_10m_dominant": [222, 148, 69, 66, 36, 223, 270, 90, 120, 240],
+        "sunset": ["2026-10-28T17:25", "2026-10-29T17:23", "2026-10-30T17:22", "2026-10-31T17:20", "2026-11-01T17:18", "2026-11-02T17:15", "2026-11-03T17:14", "2026-11-04T17:12", "2026-11-05T17:11", "2026-11-06T17:09"]
       }
     }
 """.trimIndent()

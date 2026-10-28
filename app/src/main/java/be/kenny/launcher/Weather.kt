@@ -54,7 +54,7 @@ data class WeatherForecast(
 object Weather {
     const val LOCATION_NAME = "Erembodegem"
     const val TIME_ZONE = "Europe/Brussels"
-    const val FORECAST_DAYS = 5
+    const val FORECAST_DAYS = 10
     val zone: ZoneId = ZoneId.of(TIME_ZONE)
 
     val requestUrl = "https://api.open-meteo.com/v1/forecast?latitude=${Sun.LAT}&longitude=${Sun.LON}" +

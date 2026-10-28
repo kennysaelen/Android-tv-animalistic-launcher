@@ -4,6 +4,7 @@ import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
 import android.os.Looper
 import android.util.TypedValue
 import android.view.KeyEvent
@@ -129,12 +130,120 @@ class ForecastScreenTest {
         assertTrue(activity.findViewById<LinearLayout>(R.id.forecastDays).getChildAt(2).hasFocus())
         assertEquals("13°", text(R.id.forecastTemperature))
         screen.render(data, loading = false, error = true, offline = false, now = now.plusDays(1))
-        assertEquals(4, activity.findViewById<LinearLayout>(R.id.forecastDays).childCount)
+        assertEquals(5, activity.findViewById<LinearLayout>(R.id.forecastDays).childCount)
         assertTrue(activity.findViewById<LinearLayout>(R.id.forecastDays).getChildAt(1).hasFocus())
-        screen.render(data, loading = false, error = true, offline = true, now = now.plusDays(6))
+        assertEquals("1–5 / 9", text(R.id.forecastPageRange))
+        screen.render(data, loading = false, error = true, offline = true, now = now.plusDays(11))
         assertEquals(0, activity.findViewById<LinearLayout>(R.id.forecastDays).childCount)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.forecastDetails).visibility)
         assertTrue(activity.findViewById<View>(R.id.forecast).hasFocus())
+    }
+
+    @Test
+    fun pagingRequiresActivationSelectsAdjacentDaysAndNeverWraps() {
+        screen.render(data, loading = false, error = false, offline = false, now = now)
+        screen.show()
+        layout()
+        val row = activity.findViewById<LinearLayout>(R.id.forecastDays)
+        val previous = activity.findViewById<View>(R.id.forecastPrevious)
+        val next = activity.findViewById<View>(R.id.forecastNext)
+        assertEquals("1–5 / 10", text(R.id.forecastPageRange))
+        assertFalse(previous.isEnabled)
+        assertFalse(previous.isFocusable)
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        assertTrue(row.getChildAt(0).hasFocus())
+        repeat(4) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        val fifthDayDetails = text(R.id.forecastLabel)
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        assertTrue(next.hasFocus())
+        assertEquals(fifthDayDetails, text(R.id.forecastLabel))
+        assertEquals("1–5 / 10", text(R.id.forecastPageRange))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        layout()
+        assertEquals(5, row.childCount)
+        assertEquals("6–10 / 10", text(R.id.forecastPageRange))
+        assertTrue(row.getChildAt(0).hasFocus())
+        assertTrue(text(R.id.forecastLabel).contains("2 november"))
+        assertEquals("13°", text(R.id.forecastTemperature))
+        assertTrue(previous.isEnabled)
+        assertFalse(next.isEnabled)
+        assertFalse(next.isFocusable)
+        repeat(5) { press(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        assertTrue(row.getChildAt(4).hasFocus())
+        assertTrue(text(R.id.forecastLabel).contains("6 november"))
+        repeat(4) { press(KeyEvent.KEYCODE_DPAD_LEFT) }
+        val sixthDayDetails = text(R.id.forecastLabel)
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        assertTrue(previous.hasFocus())
+        assertEquals(sixthDayDetails, text(R.id.forecastLabel))
+        press(KeyEvent.KEYCODE_DPAD_CENTER)
+        layout()
+        assertEquals("1–5 / 10", text(R.id.forecastPageRange))
+        assertTrue(row.getChildAt(4).hasFocus())
+        assertTrue(text(R.id.forecastLabel).contains("1 november"))
+        assertFalse(previous.isEnabled)
+    }
+
+    @Test
+    fun refreshAndReopenPreserveSecondPageSelectionAndArrowFocus() {
+        screen.render(data, loading = false, error = false, offline = false, now = now)
+        screen.show()
+        layout()
+        activity.findViewById<View>(R.id.forecastNext).performClick()
+        layout()
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        screen.render(data.copy(fetchedAt = now.plusMinutes(30).toInstant()),
+            loading = false, error = false, offline = false, now = now.plusMinutes(30))
+        layout()
+        val row = activity.findViewById<LinearLayout>(R.id.forecastDays)
+        assertEquals("6–10 / 10", text(R.id.forecastPageRange))
+        assertTrue(row.getChildAt(1).hasFocus())
+        assertTrue(text(R.id.forecastLabel).contains("3 november"))
+        screen.hide()
+        screen.show()
+        assertTrue(row.getChildAt(1).hasFocus())
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        val selected = text(R.id.forecastLabel)
+        val previous = activity.findViewById<View>(R.id.forecastPrevious)
+        assertTrue(previous.hasFocus())
+        screen.render(data, loading = false, error = false, offline = false, now = now.plusMinutes(31))
+        assertTrue(previous.hasFocus())
+        assertEquals(selected, text(R.id.forecastLabel))
+        screen.render(data, loading = false, error = false, offline = false, now = now.plusDays(1))
+        layout()
+        assertEquals("1–5 / 9", text(R.id.forecastPageRange))
+        assertTrue(row.getChildAt(4).hasFocus())
+        assertTrue(text(R.id.forecastLabel).contains("2 november"))
+        assertFalse(previous.isEnabled)
+    }
+
+    @Test
+    fun shortForecastDoesNotPadDaysOrExposeEmptyPages() {
+        screen.render(data.copy(days = data.days.take(7)),
+            loading = false, error = false, offline = false, now = now)
+        screen.show()
+        layout()
+        assertEquals("1–5 / 7", text(R.id.forecastPageRange))
+        assertTrue(text(R.id.forecastStatus).contains("niet beschikbaar"))
+        val next = activity.findViewById<View>(R.id.forecastNext)
+        next.performClick()
+        layout()
+        val row = activity.findViewById<LinearLayout>(R.id.forecastDays)
+        assertEquals(2, row.childCount)
+        assertEquals("6–7 / 7", text(R.id.forecastPageRange))
+        assertFalse(next.isEnabled)
+        next.performClick()
+        assertEquals("6–7 / 7", text(R.id.forecastPageRange))
+        activity.findViewById<View>(R.id.forecastPrevious).requestFocus()
+        screen.render(data.copy(days = data.days.take(5)),
+            loading = false, error = false, offline = false, now = now)
+        layout()
+        assertEquals(5, row.childCount)
+        assertEquals("1–5 / 5", text(R.id.forecastPageRange))
+        assertFalse(next.isEnabled)
+        assertFalse(activity.findViewById<View>(R.id.forecastPrevious).isEnabled)
+        assertTrue(row.hasFocus())
     }
 
     @Test
@@ -177,6 +286,10 @@ class ForecastScreenTest {
         assertEquals("-12°", temperature.text.toString())
         assertEquals(1, temperature.lineCount)
         assertTrue(temperature.paint.measureText(temperature.text.toString()) <= temperature.width)
+        screen.render(data.copy(days = data.days.map { it.copy(high = -12.0, low = -20.0, rainChance = 100.0) }),
+            loading = false, error = false, offline = false, now = now)
+        layout()
+        assertCardsFit()
     }
 
     @Test
@@ -190,24 +303,51 @@ class ForecastScreenTest {
         val root = activity.findViewById<View>(R.id.root)
         val details = activity.findViewById<View>(R.id.forecastDetails)
         val heading = activity.findViewById<View>(R.id.forecastDaysHeading)
-        val row = activity.findViewById<LinearLayout>(R.id.forecastDays)
         assertEquals(1920, root.width)
         assertEquals(1080, root.height)
         assertTrue("Details must not overlap forecast heading", details.bottom < heading.top)
-        assertTrue("Forecast heading must not overlap tiles", heading.bottom < row.top)
+        assertTrue("Forecast heading must not overlap tiles",
+            heading.bottom < activity.findViewById<View>(R.id.forecastPager).top)
+        for (page in 1..2) {
+            if (page == 2) {
+                activity.findViewById<View>(R.id.forecastNext).performClick()
+                layout()
+            }
+            assertCardsFit()
+            for (id in listOf(R.id.forecastPrevious, R.id.forecastNext)) {
+                val bounds = Rect()
+                assertTrue(activity.findViewById<View>(id).getGlobalVisibleRect(bounds))
+                assertTrue("Arrows must remain inside TV-safe margins", bounds.left >= 96 && bounds.right <= 1824)
+            }
+            val name = if (page == 1) "forecast-ui-test.png" else "forecast-ui-page-2-test.png"
+            val output = File("build/reports/$name")
+            checkNotNull(output.parentFile).mkdirs()
+            val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+            root.draw(Canvas(bitmap))
+            output.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            bitmap.recycle()
+        }
+    }
+
+    private fun assertCardsFit() {
+        val row = activity.findViewById<LinearLayout>(R.id.forecastDays)
         for (index in 0 until row.childCount) {
             val tile = row.getChildAt(index)
             assertTrue(tile.left >= 0 && tile.right <= row.width)
+            val bounds = Rect()
+            assertTrue(tile.getGlobalVisibleRect(bounds))
+            assertTrue("Tiles must remain inside TV-safe margins", bounds.left >= 96 && bounds.right <= 1824)
             val content = tile.findViewById<View>(R.id.weatherDayContent)
             val chance = tile.findViewById<View>(R.id.weatherDayRain)
             assertTrue("Rain chance must fit inside the tile", chance.bottom <= content.height - content.paddingBottom)
+            for (id in listOf(R.id.weatherDayName, R.id.weatherDayDate, R.id.weatherDayHigh,
+                R.id.weatherDayLow, R.id.weatherDayRain)) {
+                val label = tile.findViewById<TextView>(id)
+                assertEquals("Card labels must not wrap", 1, label.lineCount)
+                assertTrue("Card labels must not be clipped",
+                    label.paint.measureText(label.text.toString()) <= label.width)
+            }
         }
-        val output = File("build/reports/forecast-ui-test.png")
-        checkNotNull(output.parentFile).mkdirs()
-        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-        root.draw(Canvas(bitmap))
-        output.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-        bitmap.recycle()
     }
 
     private fun layout() {
