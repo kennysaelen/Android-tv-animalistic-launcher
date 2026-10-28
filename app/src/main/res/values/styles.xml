@@ -5,5 +5,44 @@
         <item name="android:windowShowWallpaper">false</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowAnimationStyle">@null</item>
+        <item name="weatherSunColor">#FFFFFF</item>
+        <item name="weatherCloudColor">#FFFFFF</item>
+        <item name="weatherRainColor">#FFFFFF</item>
+        <item name="weatherSnowColor">#FFFFFF</item>
+        <item name="weatherMoonColor">#FFFFFF</item>
+    </style>
+    <style name="WeatherIconTheme">
+        <item name="weatherSunColor">#FFD166</item>
+        <item name="weatherCloudColor">#E4EDF2</item>
+        <item name="weatherRainColor">#68B8FF</item>
+        <item name="weatherSnowColor">#BFE9FF</item>
+        <item name="weatherMoonColor">#D7DFFB</item>
+    </style>
+    <style name="WeatherText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:fontFamily">sans-serif-light</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:textSize">14dp</item>
+        <item name="android:shadowColor">#73000000</item>
+        <item name="android:shadowDy">1</item>
+        <item name="android:shadowRadius">3</item>
+    </style>
+    <style name="WeatherMetricLabel" parent="WeatherText">
+        <item name="android:textSize">12.5dp</item>
+        <item name="android:alpha">0.78</item>
+    </style>
+    <style name="WeatherMetricValue" parent="WeatherText">
+        <item name="android:layout_marginTop">8dp</item>
+        <item name="android:textSize">18dp</item>
+    </style>
+    <style name="WeatherAction" parent="WeatherText">
+        <item name="android:focusable">true</item>
+        <item name="android:clickable">true</item>
+        <item name="android:minHeight">30dp</item>
+        <item name="android:padding">7dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:background">@drawable/weather_control_background</item>
     </style>
 </resources>

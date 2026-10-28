@@ -18,7 +18,7 @@ hand-picked nature wallpaper that follows the real **sunrise and sunset**. No ba
 ## Features
 
 - **Big clock and date** in the top-left corner (`HH:mm` and the full weekday and date, Dutch/Belgian locale).
-- **Live weather** (icon and temperature) from [Open-Meteo](https://open-meteo.com/). It needs no API key, refreshes every 30 minutes, and shows a moon icon on clear nights.
+- **Live weather** (icon and temperature) from [Open-Meteo](https://open-meteo.com/). It needs no API key, refreshes every 30 minutes, and shows a moon icon on clear nights. Select the weather shortcut to open the **built-in ten-day forecast**, shown as two pages of five tiles, with colored weather icons, darker translucent tiles, feels-like temperature, rain probability, wind, and sunset.
 - **Network status icon** for Ethernet, Wi-Fi or offline.
 - **Settings gear** that opens the system settings.
 - **A single row of nine favorite apps** with their official TV banners, loaded from the installed apps. The focused tile grows and gets a white ring, and the other tiles are dimmed.
@@ -31,23 +31,27 @@ hand-picked nature wallpaper that follows the real **sunrise and sunset**. No ba
   | Night | otherwise |
 
   Sunrise and sunset are calculated on the device (NOAA approximation), so no internet is needed for this.
-- **No clutter.** It uses no AndroidX, no tracking, no ads or recommendation rows, and the BACK key does nothing on the home screen.
+- **No clutter.** It uses no AndroidX runtime libraries, no tracking, no ads or recommendation rows. BACK closes the forecast or returns from the status controls to the app row; it never exits the home screen.
 - **Small.** It is about 1.7 MB, and most of that is the three wallpapers.
 
 ## Repository layout
 
 ```
 .
-├── app/                          Android app (Kotlin, no AndroidX)
-│   └── src/main/
+├── app/                          Android app (Kotlin, no AndroidX runtime)
+│   ├── src/main/
 │       ├── AndroidManifest.xml   HOME + LEANBACK_LAUNCHER activity
 │       ├── java/be/kenny/launcher/
-│       │   ├── MainActivity.kt   UI, app row, clock, weather, network, wallpaper switching
+│       │   ├── MainActivity.kt   Dashboard, navigation, clock, refresh lifecycle, network, wallpapers
+│       │   ├── ForecastScreen.kt Native forecast UI, daily selection, loading/error states
+│       │   ├── Weather.kt        Open-Meteo request, current conditions, ten-day forecast parsing
+│       │   ├── WeatherDisplay.kt Shared weather icons, descriptions, units and wind directions
 │       │   └── Sun.kt            Sunrise/sunset and day/evening/night phase logic
 │       └── res/
 │           ├── drawable/         Vector icons (weather, wifi, gear) + scrims/focus shapes
 │           ├── drawable-nodpi/   bg_day.jpg, bg_dusk.jpg, bg_night.jpg (1920x1080)
-│           └── layout/activity_main.xml
+│           └── layout/           Dashboard, forecast screen and forecast day tiles
+│   └── src/test/                 Local parser, native rendering and D-pad regression tests
 ├── wallpapers/                   Original AI-generated wallpapers (1365x768)
 ├── docs/
 │   ├── images/                   Screenshots, mockup render, history/ (early procedural experiment)
@@ -90,6 +94,21 @@ Output: `app/build/outputs/apk/debug/app-debug.apk`
 On Linux or macOS, use `./gradlew assembleDebug`.
 Each push to `main` also builds the APK in GitHub Actions and attaches it as a workflow artifact.
 
+### Local checks
+
+With the same JDK and SDK configuration:
+
+```powershell
+.\gradlew.bat assembleDebug lintDebug testDebugUnitTest --no-daemon
+```
+
+CI runs the same checks. The tests use JUnit and Robolectric, including native Android rendering and
+D-pad input on API 26 and 34; no emulator, ADB connection, or TV is required. Robolectric's AndroidX
+dependencies are test-only and are not packaged in the APK. Test data is synthetic and the tests do
+not fetch live forecasts. Native UI renders of both pages with **test data**, not TV screenshots or
+live weather, are written to `app/build/reports/forecast-ui-test.png` and
+`app/build/reports/forecast-ui-page-2-test.png`.
+
 ## Install on the TV
 
 1. Enable **developer options** on the TV: Settings → About → press *Build* 7 times.
@@ -129,6 +148,46 @@ adb shell pm enable com.google.android.tvlauncher
 
 Pressing **HOME** on the remote now opens this launcher.
 
+## Weather forecast
+
+Press **UP** from an app tile to focus the dashboard weather shortcut, then **OK / D-pad center**
+to open the forecast. Clicking the icon/temperature also works. **RIGHT** from the shortcut reaches
+the settings gear; **DOWN** returns to the last focused app. The shortcut remains available before
+the first weather update and when offline, and it also works when no favorite apps are installed.
+
+The forecast reuses the launcher's clock, nature wallpaper, location, and Open-Meteo connection.
+It needs no separate weather app, account, API key, or additional permission.
+
+- **LEFT / RIGHT** focuses a day and updates the detail area; **OK** selects it as well. Today shows
+  the latest current conditions and measurement time. Other days show the predicted maximum
+  temperature, with the feels-like temperature and wind explicitly labeled as daily maxima.
+- Five dated tiles are shown at a time, with a **1–5 / 10** or **6–10 / 10** range indicator. Move
+  past the last tile to focus **Volgende** (Next), then press **OK** to show the second page and
+  select day 6. On the second page, move left from the first tile to **Vorige** (Previous), then
+  press **OK** to return to the first page with day 5 selected. Clicking an enabled arrow also works.
+  Merely focusing an arrow does not change the page or selected weather details.
+- Pages do not wrap: Previous is disabled on the first page and Next on the last page. Disabled
+  arrows are skipped by D-pad focus. The selected date and its page are retained across refreshes
+  and reopening the forecast when that date is still available.
+- Temperatures are in **Celsius**, wind speeds in **km/h**, and rain probability is the daily maximum.
+  Forecast dates and sunset times use the configured weather time zone.
+- **DOWN** moves to the on-screen **Terug** (Back) control. **UP** returns to the selected day.
+  When available, **Opnieuw proberen** (Retry) is reachable with **UP** from a day or **RIGHT** from Back.
+- **BACK** or the on-screen Back control closes the forecast and restores focus to the weather
+  shortcut. **HOME** also returns to the dashboard. BACK never exits the launcher.
+
+Loading, missing data (`--`), offline operation, stale data, and refresh failures are shown explicitly.
+The last successful response is retained **in memory** while the launcher is running, so a failed
+refresh does not clear an already loaded forecast. Its retrieval time stays visible; past forecast
+days are removed rather than presented as upcoming weather. Failed requests retry after one minute,
+or immediately when connectivity returns or Retry is selected. Normal refreshes remain every
+30 minutes while the launcher is started.
+
+Ten days are requested together in one Open-Meteo response; paging does not make additional network
+requests. If the provider returns fewer days, only those actual days are shown, the range indicator
+uses the available count, and a missing-data notice is displayed. Missing days are never padded with
+invented forecasts or empty selectable tiles.
+
 ## Configuration
 
 All configuration is in code. Edit it and rebuild.
@@ -137,7 +196,9 @@ All configuration is in code. Edit it and rebuild.
 |---|---|
 | Apps in the row (label, package, optional explicit activity) | `wanted` list at the top of `MainActivity.kt` |
 | Location used for sunrise/sunset and weather | `Sun.LAT` / `Sun.LON` in `Sun.kt` |
-| Weather time zone | `WEATHER_URL` in `MainActivity.kt` |
+| Forecast location label (update together with coordinates) | `Weather.LOCATION_NAME` in `Weather.kt` |
+| Weather time zone and Open-Meteo request | `Weather.TIME_ZONE` / `Weather.requestUrl` in `Weather.kt` |
+| Forecast icon colors and tile opacity | `WeatherIconTheme` in `res/values/styles.xml` and `res/drawable/weather_day_background.xml` |
 | Date locale | `dateFmt` in `MainActivity.kt` (`Locale("nl", "BE")`) |
 | Phase boundaries (1 hour around sunset) | `Sun.phase()` in `Sun.kt` |
 | Wallpapers | Replace `app/src/main/res/drawable-nodpi/bg_{day,dusk,night}.jpg` (1920x1080 recommended) |
@@ -201,12 +262,19 @@ It is there for reference only. Review it before you apply anything to your own 
 ## Tested on
 
 - Philips 65PUS8102/12, Android TV 8.0 (API 26), 1920x1080 at 320 dpi.
+- Built-in forecast verified on the Philips TPM171E (Android 8.0 / API 26) on 2026-10-28:
+  in-place installation, ten live Open-Meteo forecast days across both pages, arrow activation,
+  nonwrapping boundaries, adjacent-day selection, and Back restoring weather-shortcut focus.
+  Focusing an arrow was also checked to leave the selected weather details unchanged.
+  Navigation was exercised with ADB-sent D-pad/Back events on the physical TV; app data and the default
+  Home activity were preserved.
+- Local native Android rendering and navigation tests also cover API 26 and 34.
 
 The layout uses `dp` sizes, so it should scale to other 1080p and 4K TVs. Text sizes are also in `dp`, so the system font scale does not affect them.
 
 ## Privacy
 
-- **Weather:** the launcher sends the configured latitude and longitude, rounded to town level, to `api.open-meteo.com`. It makes no other network calls.
+- **Weather:** the launcher sends the configured latitude and longitude, rounded to town level, to `api.open-meteo.com` for current conditions and the ten-day forecast in one request. It makes no other network calls.
 - **Tracking:** it has no analytics, no tracking and no accounts.
 
 ## License

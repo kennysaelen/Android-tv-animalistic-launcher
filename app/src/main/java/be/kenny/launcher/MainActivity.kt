@@ -23,9 +23,7 @@ import android.view.ViewOutlineProvider
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
+import java.io.IOException
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -54,6 +52,8 @@ class MainActivity : Activity() {
     private lateinit var dateView: TextView
     private lateinit var weatherIcon: ImageView
     private lateinit var weatherText: TextView
+    private lateinit var weatherShortcut: View
+    private lateinit var forecastScreen: ForecastScreen
     private lateinit var netIcon: ImageView
     private lateinit var gear: ImageView
     private lateinit var row: LinearLayout
@@ -64,7 +64,10 @@ class MainActivity : Activity() {
     private var lastFocus = 0
     private var currentPhase: Sun.Phase? = null
     private var forcedPhase: Sun.Phase? = null
-    private var weatherOk = false
+    private var weatherForecast: WeatherForecast? = null
+    private var weatherLoading = false
+    private var weatherError = false
+    private var networkAvailable = false
     private var started = false
 
     private val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
@@ -92,7 +95,7 @@ class MainActivity : Activity() {
         override fun onCapabilitiesChanged(n: Network, caps: NetworkCapabilities) {
             handler.post {
                 updateNet(caps)
-                if (!weatherOk && started) scheduleWeather(0)
+                if ((weatherForecast == null || weatherError) && started) scheduleWeather(0)
             }
         }
 
@@ -110,10 +113,20 @@ class MainActivity : Activity() {
         dateView = findViewById(R.id.date)
         weatherIcon = findViewById(R.id.weatherIcon)
         weatherText = findViewById(R.id.weatherText)
+        weatherShortcut = findViewById(R.id.weatherShortcut)
         netIcon = findViewById(R.id.netIcon)
         gear = findViewById(R.id.gear)
         row = findViewById(R.id.row)
         label = findViewById(R.id.label)
+        forecastScreen = ForecastScreen(findViewById(R.id.forecast), ::closeForecast) {
+            if (started) scheduleWeather(0)
+        }
+        weatherShortcut.setOnClickListener { openForecast() }
+        weatherShortcut.setOnFocusChangeListener { view, hasFocus ->
+            val scale = if (hasFocus) 1.08f else 1f
+            view.animate().scaleX(scale).scaleY(scale).setDuration(150).start()
+            if (hasFocus) label.setText(R.string.weather_open)
+        }
 
         gear.setOnClickListener {
             try {
@@ -126,7 +139,7 @@ class MainActivity : Activity() {
             v.background = if (has) getDrawable(R.drawable.gear_focus) else null
             v.animate().alpha(if (has) 1f else 0.55f).scaleX(if (has) 1.15f else 1f)
                 .scaleY(if (has) 1.15f else 1f).setDuration(150).start()
-            if (has) label.text = "Instellingen"
+            if (has) label.setText(R.string.settings)
         }
 
         applyIntent(intent)
@@ -147,6 +160,7 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         applyIntent(intent)
+        if (intent.hasCategory(Intent.CATEGORY_HOME) && forecastScreen.isOpen) closeForecast()
         tick()
     }
 
@@ -174,7 +188,8 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        tiles.getOrNull(lastFocus)?.first?.requestFocus()
+        if (forecastScreen.isOpen) forecastScreen.restoreFocus()
+        else if (!weatherShortcut.hasFocus() && !gear.hasFocus()) focusLastApp()
     }
 
     override fun onStop() {
@@ -188,11 +203,17 @@ class MainActivity : Activity() {
         super.onDestroy()
         unregisterReceiver(packageReceiver)
         getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(netCallback)
+        handler.removeCallbacksAndMessages(null)
     }
 
-    @Deprecated("Home screen: back does nothing")
+    @Deprecated("Back closes the forecast; it never exits the home screen")
     override fun onBackPressed() {
-        if (gear.hasFocus()) tiles.getOrNull(lastFocus)?.first?.requestFocus()
+        if (forecastScreen.isOpen) closeForecast()
+        else if (gear.hasFocus() || weatherShortcut.hasFocus()) focusLastApp()
+    }
+
+    private fun focusLastApp() {
+        (tiles.getOrNull(lastFocus)?.first ?: weatherShortcut).requestFocus()
     }
 
     private fun dp(v: Float) = v * resources.displayMetrics.density
@@ -205,6 +226,7 @@ class MainActivity : Activity() {
         timeView.text = now.format(timeFmt)
         dateView.text = now.format(dateFmt)
         setPhase(forcedPhase ?: Sun.phase(now))
+        if (forecastScreen.isOpen) renderWeather()
     }
 
     private fun setPhase(p: Sun.Phase) {
@@ -253,6 +275,7 @@ class MainActivity : Activity() {
 
     private fun buildRow() {
         val gearHadFocus = gear.isFocused
+        val weatherHadFocus = weatherShortcut.isFocused
         row.removeAllViews()
         tiles.clear()
         val radius = dp(7f)
@@ -267,6 +290,7 @@ class MainActivity : Activity() {
                     it.marginStart = dp(6); it.marginEnd = dp(6)
                 }
                 isFocusable = true
+                nextFocusUpId = weatherShortcut.id
                 outlineProvider = object : ViewOutlineProvider() {
                     override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, radius)
                 }
@@ -280,8 +304,10 @@ class MainActivity : Activity() {
             row.addView(tile)
         }
         if (lastFocus >= tiles.size) lastFocus = 0
-        gear.nextFocusDownId = View.NO_ID
-        if (!gearHadFocus) tiles.getOrNull(lastFocus)?.first?.requestFocus()
+        val lastTileId = tiles.getOrNull(lastFocus)?.first?.id ?: weatherShortcut.id
+        gear.nextFocusDownId = lastTileId
+        weatherShortcut.nextFocusDownId = lastTileId
+        if (!gearHadFocus && !weatherHadFocus && !forecastScreen.isOpen) focusLastApp()
     }
 
     private fun onTileFocus(v: ImageView, a: AppEntry, has: Boolean) {
@@ -293,6 +319,7 @@ class MainActivity : Activity() {
             lastFocus = tiles.indexOfFirst { it.first === v }.coerceAtLeast(0)
             label.text = a.label
             gear.nextFocusDownId = v.id
+            weatherShortcut.nextFocusDownId = v.id
         }
     }
 
@@ -308,6 +335,7 @@ class MainActivity : Activity() {
     // ---------- status ----------
 
     private fun updateNet(caps: NetworkCapabilities?) {
+        networkAvailable = caps != null
         val res = when {
             caps == null -> R.drawable.ic_wifi_off
             caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> R.drawable.ic_ethernet
@@ -315,6 +343,40 @@ class MainActivity : Activity() {
         }
         netIcon.setImageResource(res)
         netIcon.alpha = if (caps == null) 0.45f else 1f
+        renderWeather()
+    }
+
+    private fun openForecast() {
+        setForecastVisible(true)
+        renderWeather()
+        forecastScreen.show()
+        if (started && (weatherForecast == null || weatherError)) scheduleWeather(0)
+    }
+
+    private fun closeForecast() {
+        forecastScreen.hide()
+        setForecastVisible(false)
+        weatherShortcut.requestFocus()
+    }
+
+    private fun setForecastVisible(visible: Boolean) {
+        val dashboardVisibility = if (visible) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.statusRow).visibility = dashboardVisibility
+        findViewById<View>(R.id.dashboardBottomScrim).visibility = dashboardVisibility
+        row.visibility = dashboardVisibility
+        label.visibility = dashboardVisibility
+        findViewById<View>(R.id.forecastScrim).visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
+    private fun renderWeather() {
+        if (isDestroyed) return
+        weatherForecast?.current?.let { current ->
+            weatherIcon.setImageResource(WeatherDisplay.icon(current.code, current.isDay))
+            weatherText.text = WeatherDisplay.temperature(current.temperature)
+            weatherShortcut.contentDescription = getString(R.string.weather_shortcut_description,
+                getString(WeatherDisplay.description(current.code, current.isDay)), weatherText.text)
+        }
+        forecastScreen.render(weatherForecast, weatherLoading, weatherError, !networkAvailable)
     }
 
     private fun scheduleWeather(delayMs: Long) {
@@ -323,45 +385,34 @@ class MainActivity : Activity() {
     }
 
     private fun fetchWeather() {
+        if (weatherLoading || !started) return
+        weatherLoading = true
+        renderWeather()
         Thread {
             try {
-                val c = URL(WEATHER_URL).openConnection() as HttpURLConnection
-                c.connectTimeout = 8000
-                c.readTimeout = 8000
-                val body = c.inputStream.bufferedReader().use { it.readText() }
-                c.disconnect()
-                val cur = JSONObject(body).getJSONObject("current")
-                val temp = cur.getDouble("temperature_2m").roundToInt()
-                val icon = weatherIconFor(cur.getInt("weather_code"), cur.optInt("is_day", 1) == 1)
+                val forecast = Weather.load()
                 handler.post {
-                    weatherOk = true
-                    weatherIcon.setImageResource(icon)
-                    weatherIcon.visibility = View.VISIBLE
-                    weatherText.text = "$temp°"
+                    if (isDestroyed) return@post
+                    weatherLoading = false
+                    weatherError = false
+                    weatherForecast = forecast
+                    renderWeather()
                     if (started) scheduleWeather(30 * 60_000L)
                 }
-            } catch (e: Exception) {
+            } catch (e: IOException) {
                 Log.w(TAG, "Weather fetch failed", e)
-                handler.post { if (started) scheduleWeather(60_000L) }
+                handler.post {
+                    if (isDestroyed) return@post
+                    weatherLoading = false
+                    weatherError = true
+                    renderWeather()
+                    if (started) scheduleWeather(60_000L)
+                }
             }
-        }.start()
-    }
-
-    private fun weatherIconFor(code: Int, isDay: Boolean) = when {
-        code == 0 -> if (isDay) R.drawable.ic_sun else R.drawable.ic_moon
-        code <= 2 -> if (isDay) R.drawable.ic_partly else R.drawable.ic_moon
-        code == 3 -> R.drawable.ic_cloud
-        code <= 48 -> R.drawable.ic_fog
-        code <= 67 -> R.drawable.ic_rain
-        code <= 77 -> R.drawable.ic_snow
-        code <= 82 -> R.drawable.ic_rain
-        code <= 86 -> R.drawable.ic_snow
-        else -> R.drawable.ic_thunder
+        }.apply { name = "Weather" }.start()
     }
 
     companion object {
         private const val TAG = "KennysLauncher"
-        private const val WEATHER_URL = "https://api.open-meteo.com/v1/forecast?latitude=${Sun.LAT}" +
-            "&longitude=${Sun.LON}&current=temperature_2m,weather_code,is_day&timezone=Europe%2FBrussels"
     }
 }

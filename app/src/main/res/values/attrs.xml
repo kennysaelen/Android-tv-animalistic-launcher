@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <attr name="weatherSunColor" format="color" />
+    <attr name="weatherCloudColor" format="color" />
+    <attr name="weatherRainColor" format="color" />
+    <attr name="weatherSnowColor" format="color" />
+    <attr name="weatherMoonColor" format="color" />
+</resources>
