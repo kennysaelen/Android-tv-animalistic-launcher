@@ -248,9 +248,11 @@ It is there for reference only. Review it before you apply anything to your own 
 ## Tested on
 
 - Philips 65PUS8102/12, Android TV 8.0 (API 26), 1920x1080 at 320 dpi.
-- The new forecast is locally checked with native Android rendering and navigation tests on API 26
-  and 34. Its appearance and remote behavior still need a physical-TV check; it has not been deployed
-  to the TV as part of this feature.
+- Built-in forecast verified on the Philips TPM171E (Android 8.0 / API 26) on 2026-10-28:
+  in-place installation, live Open-Meteo data, day selection, and Back restoring weather-shortcut focus.
+  Navigation was exercised with ADB-sent D-pad/Back events on the physical TV; app data and the default
+  Home activity were preserved.
+- Local native Android rendering and navigation tests also cover API 26 and 34.
 
 The layout uses `dp` sizes, so it should scale to other 1080p and 4K TVs. Text sizes are also in `dp`, so the system font scale does not affect them.
 
