@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/forecast"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:theme="@style/WeatherIconTheme"
+    android:visibility="gone">
+
+    <TextView
+        android:id="@+id/forecastStatus"
+        style="@style/WeatherText"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="32dp"
+        android:layout_marginEnd="44dp"
+        android:accessibilityLiveRegion="polite"
+        android:gravity="end"
+        android:maxWidth="400dp"
+        android:textSize="12dp" />
+
+    <TextView
+        android:id="@+id/forecastRetry"
+        style="@style/WeatherAction"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="77dp"
+        android:layout_marginEnd="37dp"
+        android:text="@string/weather_retry"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/forecastMessage"
+        style="@style/WeatherText"
+        android:layout_gravity="center"
+        android:accessibilityLiveRegion="polite"
+        android:gravity="center"
+        android:textSize="20dp" />
+
+    <LinearLayout
+        android:id="@+id/forecastDetails"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="46dp"
+        android:layout_marginTop="151dp"
+        android:layout_marginEnd="44dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+        <TextView
+            android:id="@+id/forecastTitle"
+            style="@style/WeatherText"
+            android:textSize="23dp" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="70dp"
+            android:layout_marginTop="27dp"
+            android:baselineAligned="false"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <ImageView
+                android:id="@+id/forecastIcon"
+                android:layout_width="55dp"
+                android:layout_height="55dp"
+                android:importantForAccessibility="no" />
+            <TextView
+                android:id="@+id/forecastTemperature"
+                style="@style/WeatherText"
+                android:layout_width="102dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="8dp"
+                android:autoSizeMaxTextSize="64dp"
+                android:autoSizeMinTextSize="42dp"
+                android:autoSizeStepGranularity="1dp"
+                android:autoSizeTextType="uniform"
+                android:gravity="center_vertical"
+                android:maxLines="1"
+                android:textSize="64dp" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/forecastCondition"
+                    style="@style/WeatherText"
+                    android:textSize="18dp" />
+                <TextView
+                    android:id="@+id/forecastRange"
+                    style="@style/WeatherText"
+                    android:layout_marginTop="10dp"
+                    android:alpha="0.86"
+                    android:textSize="14.5dp" />
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/forecastFeelsLikeLabel"
+                    style="@style/WeatherMetricLabel"
+                    android:text="@string/weather_feels_like" />
+                <TextView android:id="@+id/forecastFeelsLike" style="@style/WeatherMetricValue" />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView style="@style/WeatherMetricLabel" android:text="@string/weather_rain_chance" />
+                <TextView android:id="@+id/forecastRain" style="@style/WeatherMetricValue" />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.1"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/forecastWindLabel"
+                    style="@style/WeatherMetricLabel"
+                    android:text="@string/weather_wind" />
+                <TextView android:id="@+id/forecastWind" style="@style/WeatherMetricValue" />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.1"
+                android:orientation="vertical">
+                <TextView style="@style/WeatherMetricLabel" android:text="@string/weather_sunset" />
+                <TextView android:id="@+id/forecastSunset" style="@style/WeatherMetricValue" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/forecastDaysHeading"
+        style="@style/WeatherText"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="46dp"
+        android:layout_marginBottom="169dp"
+        android:text="@string/weather_days"
+        android:textSize="15dp"
+        android:visibility="gone" />
+    <LinearLayout
+        android:id="@+id/forecastDays"
+        android:layout_width="match_parent"
+        android:layout_height="90dp"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="46dp"
+        android:layout_marginEnd="46dp"
+        android:layout_marginBottom="62dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:orientation="horizontal" />
+    <TextView
+        android:id="@+id/forecastBack"
+        style="@style/WeatherAction"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="37dp"
+        android:layout_marginBottom="18dp"
+        android:drawableStart="@drawable/ic_back"
+        android:drawablePadding="6dp"
+        android:text="@string/weather_back" />
+    <TextView
+        android:id="@+id/forecastLabel"
+        style="@style/WeatherText"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="24dp"
+        android:alpha="0.85" />
+</FrameLayout>
