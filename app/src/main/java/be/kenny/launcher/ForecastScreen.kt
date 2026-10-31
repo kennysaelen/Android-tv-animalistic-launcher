@@ -54,7 +54,20 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
 
     fun show() {
         root.visibility = View.VISIBLE
+        resetToToday()
         focusSelection()
+    }
+
+    private fun resetToToday() {
+        if (availableDays.isEmpty()) return
+        val todayDay = availableDays.firstOrNull { it.date == today } ?: availableDays.first()
+        selectedDate = todayDay.date
+        if (pageIndex != 0 || cards.firstOrNull()?.second != availableDays.first()) {
+            pageIndex = 0
+            buildDays(availableDays.take(PAGE_SIZE))
+        }
+        updateNavigation()
+        cards.firstOrNull { it.second.date == selectedDate }?.let { select(it.first, it.second) }
     }
 
     fun hide() {
@@ -265,7 +278,8 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
         arrow.isEnabled = enabled
         arrow.isFocusable = enabled
         arrow.isClickable = enabled
-        root.findViewById<View>(containerId).alpha = if (enabled) 1f else .3f
+        // INVISIBLE keeps the arrow's space so the day tiles don't shift between pages.
+        root.findViewById<View>(containerId).visibility = if (enabled) View.VISIBLE else View.INVISIBLE
     }
 
     private fun datedDayName(day: ForecastDay) =

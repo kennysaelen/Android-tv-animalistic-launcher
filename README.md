@@ -166,9 +166,10 @@ It needs no separate weather app, account, API key, or additional permission.
   select day 6. On the second page, move left from the first tile to **Vorige** (Previous), then
   press **OK** to return to the first page with day 5 selected. Clicking an enabled arrow also works.
   Merely focusing an arrow does not change the page or selected weather details.
-- Pages do not wrap: Previous is disabled on the first page and Next on the last page. Disabled
-  arrows are skipped by D-pad focus. The selected date and its page are retained across refreshes
-  and reopening the forecast when that date is still available.
+- Pages do not wrap: Previous is hidden on the first page and Next is hidden on the last page.
+  Hidden arrows keep their space, so the day tiles never shift. Opening the forecast always starts
+  on the first page with **Vandaag** (Today) focused. While the forecast stays open, the selected
+  date and its page are kept across background refreshes.
 - Temperatures are in **Celsius**, wind speeds in **km/h**, and rain probability is the daily maximum.
   Forecast dates and sunset times use the configured weather time zone.
 - **DOWN** moves to the on-screen **Terug** (Back) control. **UP** returns to the selected day.
