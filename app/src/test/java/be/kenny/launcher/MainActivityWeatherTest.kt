@@ -26,7 +26,10 @@ class MainActivityWeatherTest {
         val activity = controller.get()
         try {
             val shortcut = activity.findViewById<View>(R.id.weatherShortcut)
+            val appsTile = activity.findViewById<View>(R.id.appsTile)
             assertTrue(shortcut.isShown)
+            assertTrue("Apps tile is always present and focused first", appsTile.hasFocus())
+            press(activity, KeyEvent.KEYCODE_DPAD_UP)
             assertTrue(shortcut.hasFocus())
             press(activity, KeyEvent.KEYCODE_DPAD_CENTER)
             assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.forecast).visibility)
@@ -37,7 +40,7 @@ class MainActivityWeatherTest {
             assertTrue(shortcut.hasFocus())
             press(activity, KeyEvent.KEYCODE_BACK)
             assertFalse(activity.isFinishing)
-            assertTrue(shortcut.hasFocus())
+            assertTrue(appsTile.hasFocus())
         } finally {
             controller.destroy()
         }
