@@ -201,7 +201,15 @@ class ForecastScreenTest {
         assertTrue(text(R.id.forecastLabel).contains("3 november"))
         screen.hide()
         screen.show()
-        assertTrue(row.getChildAt(1).hasFocus())
+        assertEquals("Reopening always returns to today", "1–5 / 10", text(R.id.forecastPageRange))
+        assertTrue(row.getChildAt(0).hasFocus())
+        assertTrue(text(R.id.forecastLabel).startsWith("Vandaag"))
+        assertEquals(View.INVISIBLE, activity.findViewById<View>(R.id.forecastPreviousControl).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.forecastNextControl).visibility)
+        activity.findViewById<View>(R.id.forecastNext).performClick()
+        layout()
+        assertEquals(View.INVISIBLE, activity.findViewById<View>(R.id.forecastNextControl).visibility)
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
         press(KeyEvent.KEYCODE_DPAD_LEFT)
         press(KeyEvent.KEYCODE_DPAD_LEFT)
         val selected = text(R.id.forecastLabel)
@@ -314,7 +322,10 @@ class ForecastScreenTest {
                 layout()
             }
             assertCardsFit()
-            for (id in listOf(R.id.forecastPrevious, R.id.forecastNext)) {
+            val visibleArrow = if (page == 1) R.id.forecastNext else R.id.forecastPrevious
+            val hiddenArrow = if (page == 1) R.id.forecastPrevious else R.id.forecastNext
+            assertFalse(activity.findViewById<View>(hiddenArrow).isShown)
+            for (id in listOf(visibleArrow)) {
                 val bounds = Rect()
                 assertTrue(activity.findViewById<View>(id).getGlobalVisibleRect(bounds))
                 assertTrue("Arrows must remain inside TV-safe margins", bounds.left >= 96 && bounds.right <= 1824)
