@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings">Instellingen</string>
+    <string name="apps_open">Alle apps</string>
+    <string name="apps_title">Alle apps</string>
+    <string name="apps_empty">Geen apps gevonden</string>
     <string name="weather_open">Weerbericht openen</string>
     <string name="weather_shortcut_description">%1$s, %2$s. Weerbericht openen</string>
     <string name="weather_title">Weer in %1$s</string>
