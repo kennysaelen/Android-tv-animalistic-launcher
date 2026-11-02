@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/apps"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:visibility="gone">
+
+    <TextView
+        android:id="@+id/appsTitle"
+        style="@style/WeatherText"
+        android:layout_marginStart="46dp"
+        android:layout_marginTop="150dp"
+        android:text="@string/apps_title"
+        android:textSize="24dp" />
+
+    <TextView
+        android:id="@+id/appsEmpty"
+        style="@style/WeatherText"
+        android:layout_gravity="center"
+        android:text="@string/apps_empty"
+        android:textSize="16dp"
+        android:visibility="gone" />
+
+    <ScrollView
+        android:id="@+id/appsScroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginBottom="62dp"
+        android:layout_marginTop="190dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:descendantFocusability="afterDescendants"
+        android:focusable="false"
+        android:paddingBottom="12dp"
+        android:paddingTop="12dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/appsGrid"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/appsBack"
+        style="@style/WeatherAction"
+        android:layout_gravity="bottom|start"
+        android:layout_marginBottom="18dp"
+        android:layout_marginStart="37dp"
+        android:drawableStart="@drawable/ic_back"
+        android:drawablePadding="6dp"
+        android:text="@string/weather_back" />
+</FrameLayout>

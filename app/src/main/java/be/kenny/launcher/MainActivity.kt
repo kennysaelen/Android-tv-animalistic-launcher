@@ -42,9 +42,8 @@ class MainActivity : Activity() {
         AppEntry("VRT MAX", "be.vrt.vrtnu"),
         AppEntry("VTM GO", "be.vmma.vtm.zenderapp"),
         AppEntry("Streamz", "be.dpgmedia.streamz"),
-        AppEntry("TV kijken", "org.droidtv.playtv",
-            ComponentName("org.droidtv.playtv", "org.droidtv.playtv.PlayTvActivity")),
     )
+    private val appsEntry by lazy { AppEntry(getString(R.string.apps_open), "") }
 
     private lateinit var bgBack: ImageView
     private lateinit var bgFront: ImageView
@@ -54,6 +53,7 @@ class MainActivity : Activity() {
     private lateinit var weatherText: TextView
     private lateinit var weatherShortcut: View
     private lateinit var forecastScreen: ForecastScreen
+    private lateinit var appsScreen: AppsScreen
     private lateinit var netIcon: ImageView
     private lateinit var gear: ImageView
     private lateinit var row: LinearLayout
@@ -69,6 +69,7 @@ class MainActivity : Activity() {
     private var weatherError = false
     private var networkAvailable = false
     private var started = false
+    private var initialFocusPlaced = false
 
     private val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
     private val dateFmt = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale("nl", "BE"))
@@ -86,6 +87,7 @@ class MainActivity : Activity() {
         override fun onReceive(c: Context, i: Intent) {
             val pkg = i.data?.schemeSpecificPart ?: return
             if (wanted.any { it.pkg == pkg }) buildRow()
+            if (appsScreen.isOpen) appsScreen.refresh()
         }
     }
 
@@ -121,6 +123,7 @@ class MainActivity : Activity() {
         forecastScreen = ForecastScreen(findViewById(R.id.forecast), ::closeForecast) {
             if (started) scheduleWeather(0)
         }
+        appsScreen = AppsScreen(findViewById(R.id.apps), ::closeApps)
         weatherShortcut.setOnClickListener { openForecast() }
         weatherShortcut.setOnFocusChangeListener { view, hasFocus ->
             val scale = if (hasFocus) 1.08f else 1f
@@ -160,7 +163,10 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         applyIntent(intent)
-        if (intent.hasCategory(Intent.CATEGORY_HOME) && forecastScreen.isOpen) closeForecast()
+        if (intent.hasCategory(Intent.CATEGORY_HOME)) {
+            if (forecastScreen.isOpen) closeForecast()
+            if (appsScreen.isOpen) closeApps()
+        }
         tick()
     }
 
@@ -189,7 +195,17 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (forecastScreen.isOpen) forecastScreen.restoreFocus()
+        else if (appsScreen.isOpen) appsScreen.restoreFocus()
         else if (!weatherShortcut.hasFocus() && !gear.hasFocus()) focusLastApp()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // The framework may give default focus to the first status icon; HOME should start on the app row.
+        if (hasFocus && !initialFocusPlaced) {
+            initialFocusPlaced = true
+            if (!forecastScreen.isOpen && !appsScreen.isOpen) focusLastApp()
+        }
     }
 
     override fun onStop() {
@@ -206,9 +222,10 @@ class MainActivity : Activity() {
         handler.removeCallbacksAndMessages(null)
     }
 
-    @Deprecated("Back closes the forecast; it never exits the home screen")
+    @Deprecated("Back closes an overlay; it never exits the home screen")
     override fun onBackPressed() {
         if (forecastScreen.isOpen) closeForecast()
+        else if (appsScreen.isOpen) closeApps()
         else if (gear.hasFocus() || weatherShortcut.hasFocus()) focusLastApp()
     }
 
@@ -303,11 +320,32 @@ class MainActivity : Activity() {
             tiles += tile to a
             row.addView(tile)
         }
+        val appsTile = ImageView(this).apply {
+            id = R.id.appsTile
+            setImageResource(R.drawable.ic_apps)
+            setBackgroundResource(R.drawable.apps_tile_background)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            contentDescription = appsEntry.label
+            layoutParams = LinearLayout.LayoutParams(dp(84), dp(47)).also {
+                it.marginStart = dp(6); it.marginEnd = dp(6)
+            }
+            isFocusable = true
+            nextFocusUpId = weatherShortcut.id
+            nextFocusRightId = R.id.appsTile
+            clipToOutline = true
+            elevation = dp(4f)
+            colorFilter = dimFilter
+            setOnClickListener { openApps() }
+            setOnFocusChangeListener { v, has -> onTileFocus(v as ImageView, appsEntry, has) }
+        }
+        tiles += appsTile to appsEntry
+        row.addView(appsTile)
         if (lastFocus >= tiles.size) lastFocus = 0
         val lastTileId = tiles.getOrNull(lastFocus)?.first?.id ?: weatherShortcut.id
         gear.nextFocusDownId = lastTileId
         weatherShortcut.nextFocusDownId = lastTileId
-        if (!gearHadFocus && !weatherHadFocus && !forecastScreen.isOpen) focusLastApp()
+        if (!gearHadFocus && !weatherHadFocus && !forecastScreen.isOpen && !appsScreen.isOpen) focusLastApp()
     }
 
     private fun onTileFocus(v: ImageView, a: AppEntry, has: Boolean) {
@@ -346,8 +384,19 @@ class MainActivity : Activity() {
         renderWeather()
     }
 
+    private fun openApps() {
+        setOverlayVisible(true)
+        appsScreen.show()
+    }
+
+    private fun closeApps() {
+        appsScreen.hide()
+        setOverlayVisible(false)
+        (tiles.lastOrNull()?.first ?: weatherShortcut).requestFocus()
+    }
+
     private fun openForecast() {
-        setForecastVisible(true)
+        setOverlayVisible(true)
         renderWeather()
         forecastScreen.show()
         if (started && (weatherForecast == null || weatherError)) scheduleWeather(0)
@@ -355,11 +404,11 @@ class MainActivity : Activity() {
 
     private fun closeForecast() {
         forecastScreen.hide()
-        setForecastVisible(false)
+        setOverlayVisible(false)
         weatherShortcut.requestFocus()
     }
 
-    private fun setForecastVisible(visible: Boolean) {
+    private fun setOverlayVisible(visible: Boolean) {
         val dashboardVisibility = if (visible) View.GONE else View.VISIBLE
         findViewById<View>(R.id.statusRow).visibility = dashboardVisibility
         findViewById<View>(R.id.dashboardBottomScrim).visibility = dashboardVisibility

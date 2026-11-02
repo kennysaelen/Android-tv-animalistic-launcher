@@ -21,7 +21,8 @@ hand-picked nature wallpaper that follows the real **sunrise and sunset**. No ba
 - **Live weather** (icon and temperature) from [Open-Meteo](https://open-meteo.com/). It needs no API key, refreshes every 30 minutes, and shows a moon icon on clear nights. Select the weather shortcut to open the **built-in ten-day forecast**, shown as two pages of five tiles, with colored weather icons, darker translucent tiles, feels-like temperature, rain probability, wind, and sunset.
 - **Network status icon** for Ethernet, Wi-Fi or offline.
 - **Settings gear** that opens the system settings.
-- **A single row of nine favorite apps** with their official TV banners, loaded from the installed apps. The focused tile grows and gets a white ring, and the other tiles are dimmed.
+- **A single row of eight favorite apps** with their official TV banners, loaded from the installed apps. The focused tile grows and gets a white ring, and the other tiles are dimmed.
+- **An Apps tile** at the end of the row opens **Alle apps**, a full-screen grid of every installed TV app (including the Google Play Store), sorted alphabetically. Philips system entries (`org.droidtv.*`, such as Watch TV, channels and the app gallery) are hidden.
 - **Wallpaper that changes with the sun.** It crossfades over 2 seconds between three phases:
 
   | Phase | When |
@@ -31,7 +32,7 @@ hand-picked nature wallpaper that follows the real **sunrise and sunset**. No ba
   | Night | otherwise |
 
   Sunrise and sunset are calculated on the device (NOAA approximation), so no internet is needed for this.
-- **No clutter.** It uses no AndroidX runtime libraries, no tracking, no ads or recommendation rows. BACK closes the forecast or returns from the status controls to the app row; it never exits the home screen.
+- **No clutter.** It uses no AndroidX runtime libraries, no tracking, no ads or recommendation rows. BACK closes the forecast or the app grid, or returns from the status controls to the app row; it never exits the home screen.
 - **Small.** It is about 1.7 MB, and most of that is the three wallpapers.
 
 ## Repository layout
@@ -44,13 +45,14 @@ hand-picked nature wallpaper that follows the real **sunrise and sunset**. No ba
 │       ├── java/be/kenny/launcher/
 │       │   ├── MainActivity.kt   Dashboard, navigation, clock, refresh lifecycle, network, wallpapers
 │       │   ├── ForecastScreen.kt Native forecast UI, daily selection, loading/error states
+│       │   ├── AppsScreen.kt     "Alle apps" grid of all installed TV apps
 │       │   ├── Weather.kt        Open-Meteo request, current conditions, ten-day forecast parsing
 │       │   ├── WeatherDisplay.kt Shared weather icons, descriptions, units and wind directions
 │       │   └── Sun.kt            Sunrise/sunset and day/evening/night phase logic
 │       └── res/
 │           ├── drawable/         Vector icons (weather, wifi, gear) + scrims/focus shapes
 │           ├── drawable-nodpi/   bg_day.jpg, bg_dusk.jpg, bg_night.jpg (1920x1080)
-│           └── layout/           Dashboard, forecast screen and forecast day tiles
+│           └── layout/           Dashboard, forecast screen, forecast day tiles, apps grid
 │   └── src/test/                 Local parser, native rendering and D-pad regression tests
 ├── wallpapers/                   Original AI-generated wallpapers (1365x768)
 ├── docs/
@@ -153,7 +155,7 @@ Pressing **HOME** on the remote now opens this launcher.
 Press **UP** from an app tile to focus the dashboard weather shortcut, then **OK / D-pad center**
 to open the forecast. Clicking the icon/temperature also works. **RIGHT** from the shortcut reaches
 the settings gear; **DOWN** returns to the last focused app. The shortcut remains available before
-the first weather update and when offline, and it also works when no favorite apps are installed.
+the first weather update and when offline.
 
 The forecast reuses the launcher's clock, nature wallpaper, location, and Open-Meteo connection.
 It needs no separate weather app, account, API key, or additional permission.
@@ -189,6 +191,20 @@ requests. If the provider returns fewer days, only those actual days are shown, 
 uses the available count, and a missing-data notice is displayed. Missing days are never padded with
 invented forecasts or empty selectable tiles.
 
+## All apps
+
+Move **RIGHT** to the last tile in the row (the grid icon, labeled **Alle apps**) and press **OK**.
+The grid replaces the dashboard and shows every installed app with a Leanback (TV) launcher entry,
+six per row, using the app's TV banner (or its icon when it has no banner).
+
+![All apps](docs/images/screenshot_apps.jpg)
+
+- The D-pad moves through the grid; the first app is focused when the grid opens. **DOWN** from the
+  last row reaches **Terug** (Back), and **UP** from Back returns to the last focused app.
+- **OK** starts the app. Installing or removing an app while the grid is open updates it immediately.
+- **BACK**, the on-screen Back control, or **HOME** closes the grid and focuses the Apps tile again.
+- The launcher itself and Philips system entries (`org.droidtv.*`) are not listed.
+
 ## Configuration
 
 All configuration is in code. Edit it and rebuild.
@@ -196,6 +212,8 @@ All configuration is in code. Edit it and rebuild.
 | What | Where |
 |---|---|
 | Apps in the row (label, package, optional explicit activity) | `wanted` list at the top of `MainActivity.kt` |
+| Package prefixes hidden from the app grid | `AppsScreen.HIDDEN_PACKAGE_PREFIXES` in `AppsScreen.kt` |
+| App grid columns | `AppsScreen.COLUMNS` in `AppsScreen.kt` |
 | Location used for sunrise/sunset and weather | `Sun.LAT` / `Sun.LON` in `Sun.kt` |
 | Forecast location label (update together with coordinates) | `Weather.LOCATION_NAME` in `Weather.kt` |
 | Weather time zone and Open-Meteo request | `Weather.TIME_ZONE` / `Weather.requestUrl` in `Weather.kt` |
@@ -205,7 +223,8 @@ All configuration is in code. Edit it and rebuild.
 | Wallpapers | Replace `app/src/main/res/drawable-nodpi/bg_{day,dusk,night}.jpg` (1920x1080 recommended) |
 
 The launcher hides apps that are not installed. To start an app, it uses the app's Leanback launch intent and
-falls back to the regular launch intent. Some system apps need an explicit activity, such as Philips *Watch TV* (`org.droidtv.playtv/.PlayTvActivity`).
+falls back to the regular launch intent. Some system apps need an explicit activity in the `wanted` list, for example Philips *Watch TV*: `AppEntry("TV kijken", "org.droidtv.playtv", ComponentName("org.droidtv.playtv", "org.droidtv.playtv.PlayTvActivity"))`.
+It is not in the row by default because the TV is used with a cable box.
 
 ### Previewing a wallpaper phase
 
