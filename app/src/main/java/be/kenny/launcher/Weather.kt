@@ -40,31 +40,36 @@ data class WeatherForecast(
     val current: CurrentWeather,
     val days: List<ForecastDay>,
     val fetchedAt: Instant,
+    val requestedDays: Int = Weather.FORECAST_DAYS,
 ) {
     val hasMissingValues: Boolean
         get() = with(current) {
             temperature == null || feelsLike == null || code == null || isDay == null ||
                 windSpeed == null || windDirection == null
-        } || days.size < Weather.FORECAST_DAYS || days.any {
+        } || days.size < requestedDays || days.any {
             it.code == null || it.high == null || it.low == null || it.feelsLikeHigh == null ||
                 it.rainChance == null || it.windSpeed == null || it.windDirection == null || it.sunset == null
         }
 }
 
 object Weather {
-    const val LOCATION_NAME = "Erembodegem"
-    const val TIME_ZONE = "Europe/Brussels"
+    /** Default forecast length; the launcher settings allow 5–16 days (the Open-Meteo maximum). */
     const val FORECAST_DAYS = 10
-    val zone: ZoneId = ZoneId.of(TIME_ZONE)
+    const val MAX_FORECAST_DAYS = 16
 
-    val requestUrl = "https://api.open-meteo.com/v1/forecast?latitude=${Sun.LAT}&longitude=${Sun.LON}" +
+    fun requestUrl(location: WeatherLocation = WeatherLocation.DEFAULT, days: Int = FORECAST_DAYS) =
+        "https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}" +
         "&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,wind_direction_10m" +
         "&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max," +
         "precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,sunset" +
-        "&timezone=${java.net.URLEncoder.encode(TIME_ZONE, "UTF-8")}" +
-        "&forecast_days=$FORECAST_DAYS&temperature_unit=celsius&wind_speed_unit=kmh"
+        "&timezone=${java.net.URLEncoder.encode(location.timeZone, "UTF-8")}" +
+        "&forecast_days=${days.coerceIn(1, MAX_FORECAST_DAYS)}&temperature_unit=celsius&wind_speed_unit=kmh"
 
-    fun load(connection: HttpURLConnection = URL(requestUrl).openConnection() as HttpURLConnection): WeatherForecast {
+    fun load(
+        location: WeatherLocation = WeatherLocation.DEFAULT,
+        days: Int = FORECAST_DAYS,
+        connection: HttpURLConnection = URL(requestUrl(location, days)).openConnection() as HttpURLConnection,
+    ): WeatherForecast {
         try {
             connection.connectTimeout = 8000
             connection.readTimeout = 8000
@@ -72,7 +77,7 @@ object Weather {
                 throw IOException("Weather service returned HTTP ${connection.responseCode}")
             }
             val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            return parse(body)
+            return parse(body, location, days)
         } catch (e: JSONException) {
             throw IOException("Invalid weather response", e)
         } catch (e: DateTimeException) {
@@ -82,12 +87,18 @@ object Weather {
         }
     }
 
-    fun parse(body: String, fetchedAt: Instant = Instant.now()): WeatherForecast {
+    fun parse(
+        body: String,
+        location: WeatherLocation = WeatherLocation.DEFAULT,
+        requestedDays: Int = FORECAST_DAYS,
+        fetchedAt: Instant = Instant.now(),
+    ): WeatherForecast {
+        val zone = ZoneId.of(location.timeZone)
         val json = JSONObject(body)
         val current = json.getJSONObject("current")
         val daily = json.getJSONObject("daily")
         val dates = daily.getJSONArray("time")
-        if (dates.length() !in 1..FORECAST_DAYS) throw JSONException("Invalid forecast length")
+        if (dates.length() !in 1..requestedDays) throw JSONException("Invalid forecast length")
 
         fun series(name: String): JSONArray = daily.getJSONArray(name).also {
             if (it.length() != dates.length()) throw JSONException("Incomplete daily series: $name")
@@ -131,6 +142,7 @@ object Weather {
             ),
             days = days,
             fetchedAt = fetchedAt,
+            requestedDays = requestedDays,
         )
     }
 

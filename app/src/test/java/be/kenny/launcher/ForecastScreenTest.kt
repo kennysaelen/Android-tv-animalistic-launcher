@@ -36,7 +36,7 @@ class ForecastScreenTest {
     private lateinit var activity: Activity
     private lateinit var screen: ForecastScreen
     private val now = ZonedDateTime.parse("2026-10-28T01:05:00+01:00[Europe/Brussels]")
-    private val data = Weather.parse(weatherJson(), now.toInstant())
+    private val data = Weather.parse(weatherJson(), fetchedAt = now.toInstant())
     private var backCount = 0
     private var retryCount = 0
 

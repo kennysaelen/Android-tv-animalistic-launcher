@@ -1,6 +1,7 @@
 package be.kenny.launcher
 
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ResolveInfo
 import android.graphics.ColorMatrix
@@ -72,17 +73,11 @@ class AppsScreen(private val root: View, onBack: () -> Unit) {
     }
 
     private fun load(): List<App> {
-        val query = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
         val collator = Collator.getInstance(Locale("nl", "BE"))
-        return pm.queryIntentActivities(query, 0)
-            .filter { isVisible(it.activityInfo.packageName) }
-            .distinctBy { it.activityInfo.packageName }
+        return installedActivities(context)
             .map { toApp(it) }
             .sortedWith(compareBy(collator) { it.label })
     }
-
-    private fun isVisible(pkg: String) =
-        pkg != context.packageName && HIDDEN_PACKAGE_PREFIXES.none { pkg.startsWith(it) }
 
     private fun toApp(ri: ResolveInfo): App {
         val info = ri.activityInfo
@@ -171,5 +166,16 @@ class AppsScreen(private val root: View, onBack: () -> Unit) {
         private const val GAP_DP = 16
         /** Philips system entries (channels, content explorer, manual, app gallery, Watch TV). */
         val HIDDEN_PACKAGE_PREFIXES = listOf("org.droidtv.")
+
+        /** One TV launcher activity per installed app, excluding this launcher and hidden system entries. */
+        fun installedActivities(context: Context): List<ResolveInfo> {
+            val query = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
+            return context.packageManager.queryIntentActivities(query, 0)
+                .filter { ri ->
+                    val pkg = ri.activityInfo.packageName
+                    pkg != context.packageName && HIDDEN_PACKAGE_PREFIXES.none { pkg.startsWith(it) }
+                }
+                .distinctBy { it.activityInfo.packageName }
+        }
     }
 }

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<be.kenny.launcher.FocusTrapLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/settings"
+    android:layout_width="410dp"
+    android:layout_height="match_parent"
+    android:layout_gravity="top|end"
+    android:layout_marginBottom="128dp"
+    android:layout_marginEnd="30dp"
+    android:layout_marginTop="24dp"
+    android:background="@drawable/settings_panel_background"
+    android:orientation="vertical"
+    android:paddingBottom="10dp"
+    android:paddingTop="14dp"
+    android:visibility="gone">
+
+    <TextView
+        android:id="@+id/settingsTitle"
+        style="@style/WeatherText"
+        android:layout_marginBottom="6dp"
+        android:layout_marginStart="22dp"
+        android:text="@string/settings"
+        android:textSize="20dp" />
+
+    <TextView
+        android:id="@+id/settingsHint"
+        style="@style/WeatherText"
+        android:layout_marginBottom="4dp"
+        android:layout_marginEnd="22dp"
+        android:layout_marginStart="22dp"
+        android:alpha="0.7"
+        android:textSize="12dp"
+        android:visibility="gone" />
+
+    <ScrollView
+        android:id="@+id/settingsScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:descendantFocusability="afterDescendants"
+        android:fadingEdgeLength="18dp"
+        android:focusable="false"
+        android:paddingBottom="6dp"
+        android:paddingTop="4dp"
+        android:requiresFadingEdge="vertical"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/settingsList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingEnd="12dp"
+            android:paddingStart="12dp" />
+    </ScrollView>
+</be.kenny.launcher.FocusTrapLayout>
