@@ -53,7 +53,7 @@ class AppsScreenTest {
         val labels = gridItems(activity).map { it.contentDescription.toString() }
         assertEquals(listOf("Google Play Store", "Netflix", "Spotify", "TED") + (1..6).map { "Zz app $it" }, labels)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.apps).visibility)
-        assertEquals(View.GONE, activity.findViewById<View>(R.id.row).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.rowScroll).visibility)
         assertTrue(activity.findViewById<View>(R.id.time).isShown)
         assertTrue(gridItems(activity).first().hasFocus())
     }
@@ -91,7 +91,7 @@ class AppsScreenTest {
         tile.performClick()
         pressRemote(activity, KeyEvent.KEYCODE_BACK)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.apps).visibility)
-        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.row).visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.rowScroll).visibility)
         assertTrue(tile.hasFocus())
         tile.performClick()
         controller.newIntent(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))

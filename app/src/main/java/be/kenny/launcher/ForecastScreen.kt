@@ -27,7 +27,13 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
     private val dateTime = DateTimeFormatter.ofPattern("d MMM HH:mm", locale)
     private val clock = DateTimeFormatter.ofPattern("HH:mm")
     private var forecast: WeatherForecast? = null
-    private var today = LocalDate.now(Weather.zone)
+    var location: WeatherLocation = WeatherLocation.DEFAULT
+        set(value) {
+            field = value
+            updateTitle()
+        }
+    private val zone get() = location.zone
+    private var today = LocalDate.now(location.zone)
     private var selectedDate: LocalDate? = null
     private var availableDays = emptyList<ForecastDay>()
     private var pageIndex = 0
@@ -70,6 +76,10 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
         cards.firstOrNull { it.second.date == selectedDate }?.let { select(it.first, it.second) }
     }
 
+    private fun updateTitle() {
+        root.findViewById<TextView>(R.id.forecastTitle).text = context.getString(R.string.weather_title, location.name)
+    }
+
     fun hide() {
         root.visibility = View.GONE
     }
@@ -89,13 +99,13 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
         loading: Boolean,
         error: Boolean,
         offline: Boolean,
-        now: ZonedDateTime = ZonedDateTime.now(Weather.zone),
+        now: ZonedDateTime = ZonedDateTime.now(zone),
     ) {
         val hadDayFocus = cards.any { it.first.hasFocus() }
         val hadRetryFocus = retry.hasFocus()
         val focusedArrow = listOf(previous, next).firstOrNull { it.hasFocus() }
         val hadDays = cards.isNotEmpty()
-        val localToday = now.withZoneSameInstant(Weather.zone).toLocalDate()
+        val localToday = now.withZoneSameInstant(zone).toLocalDate()
         val rebuild = data != forecast || today != localToday
         forecast = data
         today = localToday
@@ -108,7 +118,7 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
 
         val status = mutableListOf(
             if (data == null) context.getString(R.string.weather_provider)
-            else context.getString(R.string.weather_updated, data.fetchedAt.atZone(Weather.zone).format(dateTime))
+            else context.getString(R.string.weather_updated, data.fetchedAt.atZone(zone).format(dateTime))
         )
         val warning = when {
             loading -> if (data == null) R.string.weather_loading else R.string.weather_updating
@@ -209,7 +219,7 @@ class ForecastScreen(private val root: View, onBack: () -> Unit, onRetry: () -> 
         val data = forecast ?: return
         selectedDate = day.date
         val current = data.current.takeIf { day.date == today && it.time.toLocalDate() == today }
-        root.findViewById<TextView>(R.id.forecastTitle).text = context.getString(R.string.weather_title, Weather.LOCATION_NAME)
+        updateTitle()
         root.findViewById<ImageView>(R.id.forecastIcon).setImageResource(
             WeatherDisplay.icon(if (current != null) current.code else day.code, current?.isDay ?: true))
         root.findViewById<TextView>(R.id.forecastTemperature).text =

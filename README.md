@@ -18,12 +18,12 @@ hand-picked nature wallpaper that follows the real **sunrise and sunset**. No ba
 ## Features
 
 - **Big clock and date** in the top-left corner (`HH:mm` and the full weekday and date, Dutch/Belgian locale).
-- **Live weather** (icon and temperature) from [Open-Meteo](https://open-meteo.com/). It needs no API key, refreshes every 30 minutes, and shows a moon icon on clear nights. Select the weather shortcut to open the **built-in ten-day forecast**, shown as two pages of five tiles, with colored weather icons, darker translucent tiles, feels-like temperature, rain probability, wind, and sunset.
+- **Live weather** (icon and temperature) from [Open-Meteo](https://open-meteo.com/). It needs no API key, refreshes every 30 minutes, and shows a moon icon on clear nights. Select the weather shortcut to open the **built-in forecast** (10 days by default, 5–16 configurable), shown in pages of five tiles, with colored weather icons, darker translucent tiles, feels-like temperature, rain probability, wind, and sunset.
 - **Network status icon** for Ethernet, Wi-Fi or offline.
-- **Settings gear** that opens the system settings.
-- **A single row of eight favorite apps** with their official TV banners, loaded from the installed apps. The focused tile grows and gets a white ring, and the other tiles are dimmed.
+- **Launcher settings** behind the gear: wallpaper, clock size, the apps in the row, tile size/spacing/corners/opacity, weather city and forecast length. Changes preview live. See [Settings](#settings).
+- **A single row of favorite apps** (up to 20, eight by default) with their official TV banners, loaded from the installed apps. When there are more apps than visible tiles, the row scrolls and wraps around like a carousel. The focused tile grows (never into its neighbors) and gets a white ring; the other tiles are dimmed.
 - **An Apps tile** at the end of the row opens **Alle apps**, a full-screen grid of every installed TV app (including the Google Play Store), sorted alphabetically. Philips system entries (`org.droidtv.*`, such as Watch TV, channels and the app gallery) are hidden.
-- **Wallpaper that changes with the sun.** It crossfades over 2 seconds between three phases:
+- **Wallpaper that changes with the sun** at the configured city (or a fixed day, evening or night wallpaper). It crossfades over 2 seconds between three phases:
 
   | Phase | When |
   |---|---|
@@ -46,13 +46,17 @@ hand-picked nature wallpaper that follows the real **sunrise and sunset**. No ba
 │       │   ├── MainActivity.kt   Dashboard, navigation, clock, refresh lifecycle, network, wallpapers
 │       │   ├── ForecastScreen.kt Native forecast UI, daily selection, loading/error states
 │       │   ├── AppsScreen.kt     "Alle apps" grid of all installed TV apps
+│       │   ├── SettingsScreen.kt Launcher settings panel (main page, app slots, add app, city search)
+│       │   ├── SettingsViews.kt  Focus-trapping panel layout and the D-pad slider
+│       │   ├── LauncherSettings.kt Settings model, ranges and SharedPreferences store
+│       │   ├── Geocoding.kt      Open-Meteo city search
 │       │   ├── Weather.kt        Open-Meteo request, current conditions, ten-day forecast parsing
 │       │   ├── WeatherDisplay.kt Shared weather icons, descriptions, units and wind directions
 │       │   └── Sun.kt            Sunrise/sunset and day/evening/night phase logic
 │       └── res/
 │           ├── drawable/         Vector icons (weather, wifi, gear) + scrims/focus shapes
 │           ├── drawable-nodpi/   bg_day.jpg, bg_dusk.jpg, bg_night.jpg (1920x1080)
-│           └── layout/           Dashboard, forecast screen, forecast day tiles, apps grid
+│           └── layout/           Dashboard, forecast screen, forecast day tiles, apps grid, settings panel
 │   └── src/test/                 Local parser, native rendering and D-pad regression tests
 ├── wallpapers/                   Original AI-generated wallpapers (1365x768)
 ├── docs/
@@ -163,7 +167,7 @@ It needs no separate weather app, account, API key, or additional permission.
 - **LEFT / RIGHT** focuses a day and updates the detail area; **OK** selects it as well. Today shows
   the latest current conditions and measurement time. Other days show the predicted maximum
   temperature, with the feels-like temperature and wind explicitly labeled as daily maxima.
-- Five dated tiles are shown at a time, with a **1–5 / 10** or **6–10 / 10** range indicator. Move
+- Five dated tiles are shown at a time, with a range indicator such as **1–5 / 10** or **6–10 / 10**. Move
   past the last tile to focus **Volgende** (Next), then press **OK** to show the second page and
   select day 6. On the second page, move left from the first tile to **Vorige** (Previous), then
   press **OK** to return to the first page with day 5 selected. Clicking an enabled arrow also works.
@@ -186,7 +190,7 @@ days are removed rather than presented as upcoming weather. Failed requests retr
 or immediately when connectivity returns or Retry is selected. Normal refreshes remain every
 30 minutes while the launcher is started.
 
-Ten days are requested together in one Open-Meteo response; paging does not make additional network
+All configured days (10 by default) are requested together in one Open-Meteo response; paging does not make additional network
 requests. If the provider returns fewer days, only those actual days are shown, the range indicator
 uses the available count, and a missing-data notice is displayed. Missing days are never padded with
 invented forecasts or empty selectable tiles.
@@ -205,30 +209,68 @@ six per row, using the app's TV banner (or its icon when it has no banner).
 - **BACK**, the on-screen Back control, or **HOME** closes the grid and focuses the Apps tile again.
 - The launcher itself and Philips system entries (`org.droidtv.*`) are not listed.
 
+## Settings
+
+Select the **gear** in the top-right corner (press **UP** from the app row, then **RIGHT**) to open
+**Instellingen**. The panel slides over the right side of the dashboard, so the clock, wallpaper and
+app row stay visible and every change is previewed immediately. Settings are saved on the TV and kept
+across restarts and updates.
+
+| Settings | City search |
+|---|---|
+| ![Settings](docs/images/screenshot_settings.jpg) | ![City search](docs/images/screenshot_settings_city.jpg) |
+
+| Setting | Values | Default |
+|---|---|---|
+| **Achtergrond** (wallpaper) | Volgt de zon (follows sunrise/sunset), Dag, Avond, Nacht | Volgt de zon |
+| **Klokgrootte** (clock size) | 40–120; the date scales along | 60 |
+| **Apps in de rij** (apps in the row) | Any installed TV app, up to 20, in any order | 8 streaming apps |
+| **Zichtbare tegels** (visible tiles, including the Apps tile) | 3–12; tiles shrink when many are visible | 9 |
+| **Tussenruimte** (spacing) | 0–32 dp | 12 |
+| **Hoeken** (corner radius) | 0 (square) – 24 dp | 7 |
+| **Dekking niet-geselecteerd** (opacity of unselected tiles) | 20–100% | 100% |
+| **Stad** (city for weather and sunrise/sunset) | Any place found by the Open-Meteo geocoding search | Erembodegem, Belgium |
+| **Voorspelling** (forecast length) | 5–16 days | 10 |
+
+- **UP / DOWN** moves between settings. **LEFT / RIGHT** changes a slider or choice; **OK** also
+  cycles a choice or opens a sub-page. Focus never leaves the panel.
+- **Apps in de rij:** press **OK** on an app to pick it up (gold outline), move it with **UP / DOWN**,
+  and press **OK** again to drop it. Move **RIGHT** to its **✕** to remove it. **App toevoegen**
+  (add app) at the bottom lists every installed TV app that is not in the row yet.
+- **Stad:** select the search field to open the on-screen keyboard, type a city or municipality and
+  press the keyboard's search key (or **Zoeken**). Choose a result to use it. The forecast is fetched
+  again immediately, and the wallpaper follows sunrise and sunset in that city and its time zone.
+- The focus zoom follows **Tussenruimte**: each side of the focused tile grows by at most the spacing
+  minus 2 dp (up to 18%), so it never touches its neighbors. At 0–2 dp the tile only gets the white
+  ring and full opacity.
+- **Systeeminstellingen** opens the Android TV system settings. **Standaardwaarden herstellen**
+  (restore defaults) needs a second press to confirm and resets everything, including the apps and city.
+- **BACK** goes back one page and closes the panel from the main page; **HOME** closes it at once.
+  Focus returns to the gear.
+
 ## Configuration
 
-All configuration is in code. Edit it and rebuild.
+Everyday choices are in [Settings](#settings). The rest of the configuration is in code. Edit it and rebuild.
 
 | What | Where |
 |---|---|
-| Apps in the row (label, package, optional explicit activity) | `wanted` list at the top of `MainActivity.kt` |
+| Default settings (apps, sizes, city, forecast length) and their ranges | `LauncherSettings` in `LauncherSettings.kt` |
 | Package prefixes hidden from the app grid | `AppsScreen.HIDDEN_PACKAGE_PREFIXES` in `AppsScreen.kt` |
 | App grid columns | `AppsScreen.COLUMNS` in `AppsScreen.kt` |
-| Location used for sunrise/sunset and weather | `Sun.LAT` / `Sun.LON` in `Sun.kt` |
-| Forecast location label (update together with coordinates) | `Weather.LOCATION_NAME` in `Weather.kt` |
-| Weather time zone and Open-Meteo request | `Weather.TIME_ZONE` / `Weather.requestUrl` in `Weather.kt` |
+| Open-Meteo forecast and city search requests | `Weather.requestUrl` in `Weather.kt`, `Geocoding.requestUrl` in `Geocoding.kt` |
 | Forecast icon colors and tile opacity | `WeatherIconTheme` in `res/values/styles.xml` and `res/drawable/weather_day_background.xml` |
 | Date locale | `dateFmt` in `MainActivity.kt` (`Locale("nl", "BE")`) |
 | Phase boundaries (1 hour around sunset) | `Sun.phase()` in `Sun.kt` |
 | Wallpapers | Replace `app/src/main/res/drawable-nodpi/bg_{day,dusk,night}.jpg` (1920x1080 recommended) |
 
 The launcher hides apps that are not installed. To start an app, it uses the app's Leanback launch intent and
-falls back to the regular launch intent. Some system apps need an explicit activity in the `wanted` list, for example Philips *Watch TV*: `AppEntry("TV kijken", "org.droidtv.playtv", ComponentName("org.droidtv.playtv", "org.droidtv.playtv.PlayTvActivity"))`.
+falls back to the regular launch intent. A default slot can also name an explicit activity, for example Philips *Watch TV*:
+`AppSlot("org.droidtv.playtv", ComponentName("org.droidtv.playtv", "org.droidtv.playtv.PlayTvActivity"))`.
 It is not in the row by default because the TV is used with a cable box.
 
 ### Previewing a wallpaper phase
 
-You can force a phase without waiting for sunset:
+Use **Achtergrond** in [Settings](#settings) to pin a wallpaper. For a quick test you can also force a phase over ADB:
 
 ```powershell
 adb shell am start -n be.kenny.launcher/.MainActivity --es phase day      # day | evening | night | auto
@@ -288,13 +330,16 @@ It is there for reference only. Review it before you apply anything to your own 
   Focusing an arrow was also checked to leave the selected weather details unchanged.
   Navigation was exercised with ADB-sent D-pad/Back events on the physical TV; app data and the default
   Home activity were preserved.
+- Launcher settings verified on the same TV: live preview of every slider, carousel wrap with 5 visible tiles,
+  slot move with live row preview, city search with the Android TV keyboard, and BACK returning focus to the gear.
 - Local native Android rendering and navigation tests also cover API 26 and 34.
 
 The layout uses `dp` sizes, so it should scale to other 1080p and 4K TVs. Text sizes are also in `dp`, so the system font scale does not affect them.
 
 ## Privacy
 
-- **Weather:** the launcher sends the configured latitude and longitude, rounded to town level, to `api.open-meteo.com` for current conditions and the ten-day forecast in one request. It makes no other network calls.
+- **Weather:** the launcher sends the configured latitude and longitude, rounded to town level, to `api.open-meteo.com` for current conditions and the forecast in one request.
+- **City search:** the text typed in **Stad** is sent to `geocoding-api.open-meteo.com` only when you search. The launcher makes no other network calls.
 - **Tracking:** it has no analytics, no tracking and no accounts.
 
 ## License

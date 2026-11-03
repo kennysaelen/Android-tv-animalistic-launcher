@@ -6,10 +6,12 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Outline
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -18,8 +20,11 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.util.TypedValue
 import android.view.View
 import android.view.ViewOutlineProvider
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -33,17 +38,9 @@ class MainActivity : Activity() {
 
     private data class AppEntry(val label: String, val pkg: String, val component: ComponentName? = null)
 
-    private val wanted = listOf(
-        AppEntry("Netflix", "com.netflix.ninja"),
-        AppEntry("YouTube", "com.google.android.youtube.tv"),
-        AppEntry("Prime Video", "com.amazon.amazonvideo.livingroom"),
-        AppEntry("Disney+", "com.disney.disneyplus"),
-        AppEntry("Spotify", "com.spotify.tv.android"),
-        AppEntry("VRT MAX", "be.vrt.vrtnu"),
-        AppEntry("VTM GO", "be.vmma.vtm.zenderapp"),
-        AppEntry("Streamz", "be.dpgmedia.streamz"),
-    )
     private val appsEntry by lazy { AppEntry(getString(R.string.apps_open), "") }
+    private lateinit var settingsStore: SettingsStore
+    private var settings = LauncherSettings()
 
     private lateinit var bgBack: ImageView
     private lateinit var bgFront: ImageView
@@ -54,8 +51,11 @@ class MainActivity : Activity() {
     private lateinit var weatherShortcut: View
     private lateinit var forecastScreen: ForecastScreen
     private lateinit var appsScreen: AppsScreen
+    internal lateinit var settingsScreen: SettingsScreen
     private lateinit var netIcon: ImageView
     private lateinit var gear: ImageView
+    private lateinit var rowScroll: HorizontalScrollView
+    private lateinit var rowClip: View
     private lateinit var row: LinearLayout
     private lateinit var label: TextView
 
@@ -86,8 +86,9 @@ class MainActivity : Activity() {
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
             val pkg = i.data?.schemeSpecificPart ?: return
-            if (wanted.any { it.pkg == pkg }) buildRow()
+            if (settings.slots.any { it.pkg == pkg }) buildRow()
             if (appsScreen.isOpen) appsScreen.refresh()
+            settingsScreen.refreshApps()
         }
     }
 
@@ -118,12 +119,19 @@ class MainActivity : Activity() {
         weatherShortcut = findViewById(R.id.weatherShortcut)
         netIcon = findViewById(R.id.netIcon)
         gear = findViewById(R.id.gear)
+        rowScroll = findViewById(R.id.rowScroll)
+        rowClip = findViewById(R.id.rowClip)
         row = findViewById(R.id.row)
         label = findViewById(R.id.label)
+        settingsStore = SettingsStore(this)
+        settings = settingsStore.load()
         forecastScreen = ForecastScreen(findViewById(R.id.forecast), ::closeForecast) {
             if (started) scheduleWeather(0)
         }
+        forecastScreen.location = settings.location
         appsScreen = AppsScreen(findViewById(R.id.apps), ::closeApps)
+        settingsScreen = SettingsScreen(findViewById(R.id.settings), ::onSettingsChanged, ::openSystemSettings, ::closeSettings)
+        applyClockSize()
         weatherShortcut.setOnClickListener { openForecast() }
         weatherShortcut.setOnFocusChangeListener { view, hasFocus ->
             val scale = if (hasFocus) 1.08f else 1f
@@ -131,13 +139,7 @@ class MainActivity : Activity() {
             if (hasFocus) label.setText(R.string.weather_open)
         }
 
-        gear.setOnClickListener {
-            try {
-                startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            } catch (e: Exception) {
-                Log.w(TAG, "Settings not available", e)
-            }
-        }
+        gear.setOnClickListener { openSettings() }
         gear.setOnFocusChangeListener { v, has ->
             v.background = if (has) getDrawable(R.drawable.gear_focus) else null
             v.animate().alpha(if (has) 1f else 0.55f).scaleX(if (has) 1.15f else 1f)
@@ -166,6 +168,7 @@ class MainActivity : Activity() {
         if (intent.hasCategory(Intent.CATEGORY_HOME)) {
             if (forecastScreen.isOpen) closeForecast()
             if (appsScreen.isOpen) closeApps()
+            if (settingsScreen.isOpen) closeSettings()
         }
         tick()
     }
@@ -196,6 +199,7 @@ class MainActivity : Activity() {
         super.onResume()
         if (forecastScreen.isOpen) forecastScreen.restoreFocus()
         else if (appsScreen.isOpen) appsScreen.restoreFocus()
+        else if (settingsScreen.isOpen) settingsScreen.restoreFocus()
         else if (!weatherShortcut.hasFocus() && !gear.hasFocus()) focusLastApp()
     }
 
@@ -204,7 +208,7 @@ class MainActivity : Activity() {
         // The framework may give default focus to the first status icon; HOME should start on the app row.
         if (hasFocus && !initialFocusPlaced) {
             initialFocusPlaced = true
-            if (!forecastScreen.isOpen && !appsScreen.isOpen) focusLastApp()
+            if (!overlayOpen) focusLastApp()
         }
     }
 
@@ -226,8 +230,12 @@ class MainActivity : Activity() {
     override fun onBackPressed() {
         if (forecastScreen.isOpen) closeForecast()
         else if (appsScreen.isOpen) closeApps()
+        else if (settingsScreen.isOpen) settingsScreen.back()
         else if (gear.hasFocus() || weatherShortcut.hasFocus()) focusLastApp()
     }
+
+    private val overlayOpen: Boolean
+        get() = forecastScreen.isOpen || appsScreen.isOpen || settingsScreen.isOpen
 
     private fun focusLastApp() {
         (tiles.getOrNull(lastFocus)?.first ?: weatherShortcut).requestFocus()
@@ -242,7 +250,7 @@ class MainActivity : Activity() {
         val now = ZonedDateTime.now()
         timeView.text = now.format(timeFmt)
         dateView.text = now.format(dateFmt)
-        setPhase(forcedPhase ?: Sun.phase(now))
+        setPhase(forcedPhase ?: settings.wallpaper.phase ?: Sun.phase(now, settings.location))
         if (forecastScreen.isOpen) renderWeather()
     }
 
@@ -295,25 +303,35 @@ class MainActivity : Activity() {
         val weatherHadFocus = weatherShortcut.isFocused
         row.removeAllViews()
         tiles.clear()
-        val radius = dp(7f)
-        for (a in wanted) {
+        val spacing = dp(settings.tileSpacing)
+        val count = settings.slots.size + 1
+        val visible = minOf(settings.visibleTiles, count)
+        // Keep the 84 dp banner size when it fits; shrink tiles when many are visible side by side.
+        val tileWidthDp = minOf(84f, (MAX_ROW_WIDTH_DP - visible * settings.tileSpacing) / visible)
+        val tileW = dp(tileWidthDp).roundToInt()
+        val tileH = dp(tileWidthDp * 47f / 84f).roundToInt()
+        val radius = dp(settings.cornerRadius.toFloat())
+        val outline = object : ViewOutlineProvider() {
+            override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, radius)
+        }
+        fun params() = LinearLayout.LayoutParams(tileW, tileH).also {
+            it.marginStart = spacing / 2; it.marginEnd = spacing - spacing / 2
+        }
+        for (slot in settings.slots) {
+            val a = AppEntry(appLabel(slot.pkg), slot.pkg, slot.component)
             val launch = launchIntent(a) ?: continue
             val tile = ImageView(this).apply {
                 id = View.generateViewId()
                 setImageDrawable(loadBanner(a, launch))
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 contentDescription = a.label
-                layoutParams = LinearLayout.LayoutParams(dp(84), dp(47)).also {
-                    it.marginStart = dp(6); it.marginEnd = dp(6)
-                }
+                layoutParams = params()
                 isFocusable = true
                 nextFocusUpId = weatherShortcut.id
-                outlineProvider = object : ViewOutlineProvider() {
-                    override fun getOutline(v: View, o: Outline) = o.setRoundRect(0, 0, v.width, v.height, radius)
-                }
+                outlineProvider = outline
                 clipToOutline = true
-                elevation = dp(4f)
                 colorFilter = dimFilter
+                alpha = unselectedAlpha
                 setOnClickListener { launch(a) }
                 setOnFocusChangeListener { v, has -> onTileFocus(v as ImageView, a, has) }
             }
@@ -323,36 +341,67 @@ class MainActivity : Activity() {
         val appsTile = ImageView(this).apply {
             id = R.id.appsTile
             setImageResource(R.drawable.ic_apps)
-            setBackgroundResource(R.drawable.apps_tile_background)
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            contentDescription = appsEntry.label
-            layoutParams = LinearLayout.LayoutParams(dp(84), dp(47)).also {
-                it.marginStart = dp(6); it.marginEnd = dp(6)
+            background = GradientDrawable().apply {
+                cornerRadius = radius.toFloat()
+                setColor(0x8A10181C.toInt())
+                setStroke(dp(0.5f).roundToInt().coerceAtLeast(1), 0x40FFFFFF)
             }
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            val pad = (tileH * 0.25f).roundToInt()
+            setPadding(pad, pad, pad, pad)
+            contentDescription = appsEntry.label
+            layoutParams = params()
             isFocusable = true
             nextFocusUpId = weatherShortcut.id
-            nextFocusRightId = R.id.appsTile
+            outlineProvider = outline
             clipToOutline = true
-            elevation = dp(4f)
             colorFilter = dimFilter
+            alpha = unselectedAlpha
             setOnClickListener { openApps() }
             setOnFocusChangeListener { v, has -> onTileFocus(v as ImageView, appsEntry, has) }
         }
         tiles += appsTile to appsEntry
         row.addView(appsTile)
+        // Carousel: the ends of the row wrap around, so the banner can be rotated in either direction.
+        val first = tiles.first().first
+        first.nextFocusLeftId = appsTile.id
+        appsTile.nextFocusRightId = first.id
+        // The focus zoom grows each side by at most the gap minus 2 dp, so a focused tile never touches its neighbors.
+        focusScale = 1f + (2f * (spacing - dp(2f)) / tileW).coerceIn(0f, MAX_FOCUS_ZOOM)
+        val growth = (tileW * (focusScale - 1f) / 2f).roundToInt()
+        val pad = growth + dp(6)
+        val vPad = (tileH * (focusScale - 1f) / 2f).roundToInt() + dp(12)
+        // Padding lives on the row (not the scroll view): the fading-edge layer and focus scrolling use the
+        // scroll view's padding box, which would clip the zoomed tile.
+        row.setPadding(pad, vPad, pad, vPad)
+        (rowClip.layoutParams as FrameLayout.LayoutParams).bottomMargin = dp(55) - vPad
+        rowScroll.layoutParams = rowScroll.layoutParams.apply { width = visible * (tileW + spacing) + 2 * pad }
         if (lastFocus >= tiles.size) lastFocus = 0
         val lastTileId = tiles.getOrNull(lastFocus)?.first?.id ?: weatherShortcut.id
         gear.nextFocusDownId = lastTileId
         weatherShortcut.nextFocusDownId = lastTileId
-        if (!gearHadFocus && !weatherHadFocus && !forecastScreen.isOpen && !appsScreen.isOpen) focusLastApp()
+        if (!gearHadFocus && !weatherHadFocus && !overlayOpen) focusLastApp()
+    }
+
+    private var focusScale = 1f + MAX_FOCUS_ZOOM
+
+    private val unselectedAlpha get() = settings.unselectedOpacity / 100f
+
+    private fun appLabel(pkg: String): String = try {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    } catch (e: Exception) {
+        pkg
     }
 
     private fun onTileFocus(v: ImageView, a: AppEntry, has: Boolean) {
-        val s = if (has) 1.18f else 1f
-        v.animate().scaleX(s).scaleY(s).translationZ(if (has) dp(8f) else 0f).setDuration(200).start()
+        val s = if (has) focusScale else 1f
+        v.animate().scaleX(s).scaleY(s)
+            .alpha(if (has) 1f else unselectedAlpha).setDuration(200).start()
         v.colorFilter = if (has) null else dimFilter
-        v.foreground = if (has) getDrawable(R.drawable.tile_ring) else null
+        v.foreground = if (has) GradientDrawable().apply {
+            cornerRadius = dp(settings.cornerRadius.toFloat())
+            setStroke(dp(2), Color.WHITE)
+        } else null
         if (has) {
             lastFocus = tiles.indexOfFirst { it.first === v }.coerceAtLeast(0)
             label.text = a.label
@@ -389,6 +438,60 @@ class MainActivity : Activity() {
         appsScreen.show()
     }
 
+    // ---------- launcher settings ----------
+
+    private fun openSettings() {
+        // The clock and app row stay visible behind the panel as a live preview.
+        findViewById<View>(R.id.statusRow).visibility = View.GONE
+        label.visibility = View.GONE
+        settingsScreen.show(settings)
+    }
+
+    private fun closeSettings() {
+        settingsScreen.hide()
+        findViewById<View>(R.id.statusRow).visibility = View.VISIBLE
+        label.visibility = View.VISIBLE
+        gear.requestFocus()
+    }
+
+    private fun openSystemSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Exception) {
+            Log.w(TAG, "Settings not available", e)
+        }
+    }
+
+    private fun onSettingsChanged(next: LauncherSettings) {
+        val old = settings
+        settings = next
+        settingsStore.save(next)
+        if (next.clockSize != old.clockSize) applyClockSize()
+        if (next.slots != old.slots || next.visibleTiles != old.visibleTiles || next.tileSpacing != old.tileSpacing ||
+            next.cornerRadius != old.cornerRadius || next.unselectedOpacity != old.unselectedOpacity) {
+            buildRow()
+        }
+        if (next.wallpaper != old.wallpaper || next.location != old.location) tick()
+        if (next.location != old.location) {
+            forecastScreen.location = next.location
+            weatherForecast = null
+            weatherError = false
+            weatherIcon.setImageResource(R.drawable.ic_partly)
+            weatherText.setText(R.string.weather_unavailable_temperature)
+            weatherShortcut.contentDescription = getString(R.string.weather_open)
+            renderWeather()
+            if (started) scheduleWeather(0)
+        } else if (next.forecastDays != old.forecastDays && started) {
+            // Debounced so holding the slider key does not fire a request for every step.
+            scheduleWeather(1000)
+        }
+    }
+
+    private fun applyClockSize() {
+        timeView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, settings.clockSize.toFloat())
+        dateView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, (17f * settings.clockSize / 60f).coerceIn(14f, 28f))
+    }
+
     private fun closeApps() {
         appsScreen.hide()
         setOverlayVisible(false)
@@ -412,7 +515,7 @@ class MainActivity : Activity() {
         val dashboardVisibility = if (visible) View.GONE else View.VISIBLE
         findViewById<View>(R.id.statusRow).visibility = dashboardVisibility
         findViewById<View>(R.id.dashboardBottomScrim).visibility = dashboardVisibility
-        row.visibility = dashboardVisibility
+        rowScroll.visibility = dashboardVisibility
         label.visibility = dashboardVisibility
         findViewById<View>(R.id.forecastScrim).visibility = if (visible) View.VISIBLE else View.GONE
     }
@@ -438,11 +541,18 @@ class MainActivity : Activity() {
         weatherLoading = true
         renderWeather()
         Thread {
+            val location = settings.location
+            val days = settings.forecastDays
             try {
-                val forecast = Weather.load()
+                val forecast = Weather.load(location, days)
                 handler.post {
                     if (isDestroyed) return@post
                     weatherLoading = false
+                    if (location != settings.location || days != settings.forecastDays) {
+                        // Settings changed while loading; fetch again for the new city or length.
+                        if (started) scheduleWeather(0)
+                        return@post
+                    }
                     weatherError = false
                     weatherForecast = forecast
                     renderWeather()
@@ -453,6 +563,10 @@ class MainActivity : Activity() {
                 handler.post {
                     if (isDestroyed) return@post
                     weatherLoading = false
+                    if (location != settings.location || days != settings.forecastDays) {
+                        if (started) scheduleWeather(0)
+                        return@post
+                    }
                     weatherError = true
                     renderWeather()
                     if (started) scheduleWeather(60_000L)
@@ -463,5 +577,8 @@ class MainActivity : Activity() {
 
     companion object {
         private const val TAG = "KennysLauncher"
+        /** Width of nine 84 dp tiles with the default 12 dp spacing; wider rows scroll instead. */
+        private const val MAX_ROW_WIDTH_DP = 864f
+        private const val MAX_FOCUS_ZOOM = 0.18f
     }
 }

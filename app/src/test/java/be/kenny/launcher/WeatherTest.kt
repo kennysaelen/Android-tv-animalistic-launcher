@@ -13,16 +13,17 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [26])
 class WeatherTest {
     @Test
     fun parsesCurrentAndTenDaysWithExplicitUnitsAndLocation() {
-        val result = Weather.parse(weatherJson(), Instant.parse("2026-10-28T00:05:00Z"))
+        val result = Weather.parse(weatherJson(), fetchedAt = Instant.parse("2026-10-28T00:05:00Z"))
         assertEquals(8.9, result.current.temperature!!, 0.001)
         assertEquals(false, result.current.isDay)
-        assertEquals(Weather.zone, result.current.time.zone)
+        assertEquals(WeatherLocation.DEFAULT.zone, result.current.time.zone)
         assertEquals(Instant.parse("2026-10-28T00:00:00Z"), result.current.time.toInstant())
         assertEquals(10, result.days.size)
         assertEquals(LocalDate.of(2026, 10, 28), result.days.first().date)
@@ -30,9 +31,24 @@ class WeatherTest {
         assertEquals(70.0, result.days[3].rainChance!!, 0.001)
         assertEquals("17:25", result.days.first().sunset.toString())
         assertFalse(result.hasMissingValues)
-        assertTrue(Weather.requestUrl.contains("latitude=${Sun.LAT}&longitude=${Sun.LON}"))
-        assertTrue(Weather.requestUrl.contains("forecast_days=10"))
-        assertTrue(Weather.requestUrl.contains("temperature_unit=celsius&wind_speed_unit=kmh"))
+        val url = Weather.requestUrl()
+        assertTrue(url.contains("latitude=50.92&longitude=4.05"))
+        assertTrue(url.contains("timezone=Europe%2FBrussels"))
+        assertTrue(url.contains("forecast_days=10"))
+        assertTrue(url.contains("temperature_unit=celsius&wind_speed_unit=kmh"))
+    }
+
+    @Test
+    fun requestUsesConfiguredCityAndForecastLength() {
+        val oslo = WeatherLocation("Oslo", 59.91, 10.75, "Europe/Oslo")
+        val url = Weather.requestUrl(oslo, 16)
+        assertTrue(url.contains("latitude=59.91&longitude=10.75"))
+        assertTrue(url.contains("timezone=Europe%2FOslo"))
+        assertTrue(url.contains("forecast_days=16"))
+        val result = Weather.parse(weatherJson(), oslo, 16)
+        assertEquals(ZoneId.of("Europe/Oslo"), result.current.time.zone)
+        assertTrue("10 of 16 requested days is incomplete", result.hasMissingValues)
+        assertFalse(Weather.parse(weatherJson(), oslo, 10).hasMissingValues)
     }
 
     @Test
@@ -90,15 +106,15 @@ class WeatherTest {
     @Test
     fun disconnectsAfterSuccessHttpFailureAndMalformedResponse() {
         val valid = FakeConnection(weatherJson())
-        assertEquals(10, Weather.load(valid).days.size)
+        assertEquals(10, Weather.load(connection = valid).days.size)
         assertTrue(valid.disconnected)
         assertEquals(8000, valid.connectTimeout)
         assertEquals(8000, valid.readTimeout)
         val error = FakeConnection("", 503)
-        assertThrows(IOException::class.java) { Weather.load(error) }
+        assertThrows(IOException::class.java) { Weather.load(connection = error) }
         assertTrue(error.disconnected)
         val malformed = FakeConnection("""{"current":{}}""")
-        assertThrows(IOException::class.java) { Weather.load(malformed) }
+        assertThrows(IOException::class.java) { Weather.load(connection = malformed) }
         assertTrue(malformed.disconnected)
     }
 

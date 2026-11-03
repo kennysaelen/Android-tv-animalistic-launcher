@@ -147,15 +147,36 @@
             android:src="@drawable/ic_gear" />
     </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/row"
+    <!-- Clips the row to the "visible tiles" width (the root does not clip its children). -->
+    <FrameLayout
+        android:id="@+id/rowClip"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="55dp"
-        android:clipChildren="false"
-        android:clipToPadding="false"
-        android:orientation="horizontal" />
+        android:layout_marginBottom="43dp">
+
+        <!-- Scrolls when more apps are pinned than "visible tiles"; MainActivity pads the row for the focus zoom. -->
+        <HorizontalScrollView
+            android:id="@+id/rowScroll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:clipToPadding="false"
+            android:descendantFocusability="afterDescendants"
+            android:fadingEdgeLength="36dp"
+            android:focusable="false"
+            android:overScrollMode="never"
+            android:requiresFadingEdge="horizontal"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/row"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+    </FrameLayout>
 
     <TextView
         android:id="@+id/label"
@@ -174,4 +195,6 @@
     <include layout="@layout/forecast" />
 
     <include layout="@layout/apps" />
+
+    <include layout="@layout/settings" />
 </FrameLayout>
